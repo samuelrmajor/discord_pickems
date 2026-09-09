@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { GameVM } from "@/lib/view";
-import { groupByDay, timeLabel } from "@/lib/format";
+import { groupByDay, timeShort } from "@/lib/format";
 import type { Side } from "@/lib/espn";
 
 type Props = {
@@ -54,7 +54,7 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
     if (state === "saved" || state === "error") {
       savedTimers.current[gameId] = setTimeout(() => {
         setSaveStates((prev) => ({ ...prev, [gameId]: "idle" }));
-      }, 1400);
+      }, 1200);
     }
   }, []);
 
@@ -85,7 +85,7 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
         });
 
         if (res.status === 409) {
-          // Kicked off between render and tap: revert and lock the card.
+          // Kicked off between render and tap: revert and lock the row.
           revert(game.id, previous);
           setLockedNow((prev) => ({ ...prev, [game.id]: true }));
           flash(game.id, "error");
@@ -107,7 +107,7 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
 
   /**
    * First tap fills only the blanks; a second tap on the same button confirms
-   * overwriting picks you already made. Stops a fat finger from wiping a card
+   * overwriting picks you already made. Stops a fat finger from wiping a row
    * somebody actually thought about.
    */
   const bulk = useCallback(
@@ -160,31 +160,31 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
 
   if (games.length === 0) {
     return (
-      <p className="px-4 py-12 text-center text-sm text-[var(--muted)]">
+      <p className="px-4 py-10 text-center text-xs text-[var(--muted)]">
         No games scheduled for week {week} yet.
       </p>
     );
   }
 
   return (
-    <div className="pb-32">
+    <div className="pb-14">
       {notice && (
         <button
           onClick={() => setNotice(null)}
-          className="mx-3 mt-3 block w-[calc(100%-1.5rem)] rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-3 py-2 text-left text-xs text-[var(--muted)]"
+          className="mx-2 mt-2 block w-[calc(100%-1rem)] rounded-lg bg-[var(--panel-2)] px-2.5 py-1.5 text-left text-[11px] leading-snug text-[var(--muted)]"
         >
-          {notice} <span className="opacity-60">(tap to dismiss)</span>
+          {notice}
         </button>
       )}
 
       {groups.map((group) => (
         <section key={group.key}>
-          <h2 className="sticky top-0 z-10 bg-[var(--bg)]/95 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-[var(--muted)] backdrop-blur">
+          <h2 className="sticky top-0 z-10 bg-[var(--bg)]/95 px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)] backdrop-blur">
             {group.label}
           </h2>
-          <div className="space-y-2 px-3">
+          <div className="px-2">
             {group.items.map((game) => (
-              <GameCard
+              <GameRow
                 key={game.id}
                 game={game}
                 locked={isLocked(game)}
@@ -198,24 +198,24 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
       ))}
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[var(--panel)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-        <div className="mx-auto flex max-w-lg items-center gap-2 px-3 py-2.5">
-          <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--muted)]">
+        <div className="mx-auto flex max-w-lg items-center gap-1.5 px-2 py-1.5">
+          <span className="w-9 shrink-0 text-center text-[11px] font-semibold tabular-nums text-[var(--muted)]">
             {pickedCount}/{games.length}
           </span>
           <BulkButton
-            label="All Home"
+            label="Home"
             armed={armedBulk === "home"}
             disabled={isPending || openGames.length === 0}
             onClick={() => bulk("home")}
           />
           <BulkButton
-            label="All Away"
+            label="Away"
             armed={armedBulk === "away"}
             disabled={isPending || openGames.length === 0}
             onClick={() => bulk("away")}
           />
           <BulkButton
-            label="All Faves"
+            label="Faves"
             armed={armedBulk === "favorite"}
             disabled={isPending || openGames.length === 0 || !hasAnyLine}
             title={hasAnyLine ? undefined : "No betting lines posted for this week yet"}
@@ -245,18 +245,16 @@ function BulkButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`flex-1 rounded-xl border px-2 py-2.5 text-xs font-semibold transition active:scale-[0.97] disabled:opacity-35 ${
-        armed
-          ? "border-[var(--warn)] bg-[var(--warn)] text-black"
-          : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--text)]"
+      className={`h-8 flex-1 rounded-lg text-[11px] font-semibold transition active:scale-[0.97] disabled:opacity-30 ${
+        armed ? "bg-[var(--warn)] text-black" : "bg-[var(--panel-2)] text-[var(--text)]"
       }`}
     >
-      {armed ? "Overwrite?" : label}
+      {armed ? "Overwrite?" : `All ${label}`}
     </button>
   );
 }
 
-function GameCard({
+function GameRow({
   game,
   locked,
   pick,
@@ -271,48 +269,47 @@ function GameCard({
 }) {
   const showSplit = locked && game.homeVotes !== null && game.awayVotes !== null;
 
-  return (
-    <div
-      className={`rounded-2xl border bg-[var(--panel)] p-2.5 transition ${
-        saveState === "error" ? "border-[var(--loss)]" : "border-[var(--line)]"
-      }`}
-    >
-      <div className="mb-2 flex items-center justify-between px-1 text-[11px] text-[var(--muted)]">
-        <span className="tabular-nums">
-          {locked ? game.statusDetail || "Locked" : timeLabel(new Date(game.kickoffAt))}
-        </span>
-        <span className="flex items-center gap-2">
-          {saveState === "saving" && <span className="opacity-70">saving...</span>}
-          {saveState === "saved" && <span className="text-[var(--accent)]">saved</span>}
-          {saveState === "error" && <span className="text-[var(--loss)]">not saved</span>}
-          <span
-            title="If the group splits 6-6, this side takes the parlay leg"
-            className="rounded bg-[var(--panel-2)] px-1.5 py-0.5"
-          >
-            tie &rarr; {game.coinFlipAbbr}
-          </span>
-          {locked && <span className="font-semibold">locked</span>}
-        </span>
-      </div>
+  // The left column doubles as the save indicator, so reporting that a tap
+  // stuck costs no extra space in the row.
+  const status =
+    saveState === "saving"
+      ? { text: "···", cls: "text-[var(--muted)]" }
+      : saveState === "saved"
+        ? { text: "saved", cls: "text-[var(--accent)]" }
+        : saveState === "error"
+          ? { text: "retry", cls: "text-[var(--loss)]" }
+          : locked
+            ? { text: game.status === "final" ? "final" : "live", cls: "text-[var(--muted)]" }
+            : { text: timeShort(new Date(game.kickoffAt)), cls: "text-[var(--muted)]" };
 
-      <div className="grid grid-cols-2 gap-2">
-        <TeamButton
-          game={game}
-          side="away"
-          selected={pick === "away"}
-          locked={locked}
-          votes={showSplit ? game.awayVotes : null}
-          onChoose={onChoose}
-        />
-        <TeamButton
-          game={game}
-          side="home"
-          selected={pick === "home"}
-          locked={locked}
-          votes={showSplit ? game.homeVotes : null}
-          onChoose={onChoose}
-        />
-      </div>
+  return (
+    <div className="flex items-center gap-1.5 border-b border-[var(--line)] py-1 last:border-b-0">
+      <span className={`w-10 shrink-0 text-[10px] tabular-nums ${status.cls}`}>{status.text}</span>
+
+      <TeamButton
+        game={game}
+        side="away"
+        selected={pick === "away"}
+        locked={locked}
+        votes={showSplit ? game.awayVotes : null}
+        onChoose={onChoose}
+      />
+      <TeamButton
+        game={game}
+        side="home"
+        selected={pick === "home"}
+        locked={locked}
+        votes={showSplit ? game.homeVotes : null}
+        onChoose={onChoose}
+      />
+
+      <span
+        title="If the group splits 6-6, this side takes the parlay leg"
+        className="w-7 shrink-0 text-right text-[9px] leading-[1.15] text-[var(--muted)]"
+      >
+        <span className="block opacity-60">tie</span>
+        <span className="block font-semibold">{game.coinFlipAbbr}</span>
+      </span>
     </div>
   );
 }
@@ -347,29 +344,36 @@ function TeamButton({
       onClick={() => onChoose(game, side)}
       aria-pressed={selected}
       aria-label={`${side === "home" ? "Home" : "Away"}: ${name}`}
-      className={`relative flex min-h-[68px] items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition active:scale-[0.97] disabled:active:scale-100 ${
+      className={`flex h-11 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 transition active:scale-[0.97] disabled:active:scale-100 ${
         selected
-          ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]"
-          : "border-[var(--line)] bg-[var(--panel-2)] text-[var(--text)]"
-      } ${locked && !selected ? "opacity-55" : ""} ${
-        missed ? "border-[var(--loss)] bg-[var(--loss)] text-white" : ""
-      }`}
+          ? "bg-[var(--accent)] text-[var(--accent-ink)]"
+          : "bg-[var(--panel)] text-[var(--text)]"
+      } ${locked && !selected ? "opacity-50" : ""} ${missed ? "bg-[var(--loss)] text-white" : ""}`}
     >
       {logo && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="" width={28} height={28} className="h-7 w-7 shrink-0 object-contain" />
+        <img src={logo} alt="" width={20} height={20} className="h-5 w-5 shrink-0 object-contain" />
       )}
-      <span className="min-w-0 flex-1">
-        <span className="block text-base font-bold leading-tight">{abbr}</span>
-        <span className={`block text-[10px] leading-tight ${selected ? "opacity-75" : "text-[var(--muted)]"}`}>
-          {side === "home" ? "home" : "away"}
-          {isFavorite && game.spread !== null ? ` · -${game.spread}` : ""}
-          {votes !== null ? ` · ${votes} pick${votes === 1 ? "" : "s"}` : ""}
+      <span className="truncate text-[13px] font-bold leading-none">{abbr}</span>
+      {isFavorite && game.spread !== null && (
+        <span
+          className={`text-[10px] leading-none ${selected ? "opacity-70" : "text-[var(--muted)]"}`}
+        >
+          -{game.spread}
         </span>
-      </span>
-      {score !== null && game.status !== "scheduled" && (
-        <span className={`text-lg font-bold tabular-nums ${won ? "" : "opacity-60"}`}>{score}</span>
       )}
+      <span className="ml-auto flex shrink-0 items-baseline gap-1">
+        {votes !== null && (
+          <span className={`text-[9px] ${selected ? "opacity-70" : "text-[var(--muted)]"}`}>
+            {votes}
+          </span>
+        )}
+        {score !== null && game.status !== "scheduled" && (
+          <span className={`text-sm font-bold tabular-nums ${won ? "" : "opacity-60"}`}>
+            {score}
+          </span>
+        )}
+      </span>
     </button>
   );
 }

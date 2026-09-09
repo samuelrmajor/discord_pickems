@@ -89,7 +89,6 @@ export default async function WeekPage({ params }: { params: Promise<{ week: str
       }
       results={
         <ResultsPanel
-          week={week}
           currentUser={user}
           standings={standings}
           games={gameVMs}

@@ -46,13 +46,13 @@ export default function WeekShell({
   return (
     <div className="mx-auto min-h-dvh w-full max-w-lg">
       <header className="border-b border-[var(--line)] bg-[var(--bg)]">
-        <div className="flex items-center justify-between px-3 pt-3">
+        <div className="flex items-center justify-between px-2 pt-1.5">
           <form action={logout}>
-            <button type="submit" className="text-xs text-[var(--muted)]">
+            <button type="submit" className="px-1 text-[11px] text-[var(--muted)]">
               <span className="font-semibold capitalize text-[var(--text)]">
                 {user.replace("_", " ")}
               </span>
-              <span className="pl-1.5 opacity-70">switch</span>
+              <span className="pl-1 opacity-70">switch</span>
             </button>
           </form>
 
@@ -60,10 +60,10 @@ export default function WeekShell({
             <WeekArrow to={week - 1} disabled={week <= first} label="Previous week">
               &lsaquo;
             </WeekArrow>
-            <span className="min-w-[86px] text-center text-sm font-bold tabular-nums">
+            <span className="min-w-[76px] text-center text-[13px] font-bold tabular-nums">
               Week {week}
               {week === currentWeek && (
-                <span className="ml-1 align-middle text-[9px] font-semibold uppercase text-[var(--accent)]">
+                <span className="ml-1 align-middle text-[8px] font-semibold uppercase text-[var(--accent)]">
                   now
                 </span>
               )}
@@ -74,14 +74,14 @@ export default function WeekShell({
           </div>
         </div>
 
-        <nav className="flex gap-1 px-3 py-2.5" role="tablist">
+        <nav className="flex gap-1 px-2 pb-1.5 pt-1" role="tablist">
           {TABS.map((t) => (
             <button
               key={t.key}
               role="tab"
               aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 rounded-xl px-2 py-2 text-sm font-semibold transition ${
+              className={`h-8 flex-1 rounded-lg text-[13px] font-semibold transition ${
                 tab === t.key
                   ? "bg-[var(--panel-2)] text-[var(--text)]"
                   : "text-[var(--muted)] active:bg-[var(--panel)]"
@@ -89,7 +89,7 @@ export default function WeekShell({
             >
               {t.label}
               {t.key === "picks" && incomplete && gameCount > 0 && (
-                <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--warn)] align-middle" />
+                <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-[var(--warn)] align-middle" />
               )}
             </button>
           ))}
@@ -117,7 +117,7 @@ function WeekArrow({
   children: ReactNode;
 }) {
   const cls =
-    "flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--line)] bg-[var(--panel)] text-lg leading-none";
+    "flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--panel)] text-base leading-none";
 
   if (disabled) {
     return (

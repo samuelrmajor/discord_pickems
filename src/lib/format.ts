@@ -2,7 +2,7 @@ const TZ = "America/New_York";
 
 const dayFmt = new Intl.DateTimeFormat("en-US", {
   timeZone: TZ,
-  weekday: "long",
+  weekday: "short",
   month: "short",
   day: "numeric",
 });
@@ -20,7 +20,7 @@ const dayKeyFmt = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
-/** "Sunday, Sep 13" — always in ET, the league's own clock. */
+/** "Sun, Sep 13" — always in ET, the league's own clock. */
 export function dayLabel(date: Date): string {
   return dayFmt.format(date);
 }
@@ -28,6 +28,15 @@ export function dayLabel(date: Date): string {
 /** "1:00 PM" in ET. */
 export function timeLabel(date: Date): string {
   return `${timeFmt.format(date)} ET`;
+}
+
+/** "1:00p" — narrow enough for a fixed column on a phone. */
+export function timeShort(date: Date): string {
+  const parts = timeFmt.formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  const period = get("dayPeriod").toLowerCase().startsWith("p") ? "p" : "a";
+  return `${get("hour")}:${get("minute")}${period}`;
 }
 
 /** Stable YYYY-MM-DD key in ET, for grouping games into days. */
