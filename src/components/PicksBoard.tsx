@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { GameVM } from "@/lib/view";
 import { groupByDay, timeLabel } from "@/lib/format";
 import type { Side } from "@/lib/espn";
@@ -22,6 +23,21 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
   const [notice, setNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const savedTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const router = useRouter();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  /**
+   * The Results and Parlay tabs are server-rendered and swapped in on the
+   * client, so they would otherwise still show the vote counts from page load.
+   * Pull fresh server data a beat after the last pick lands — debounced so a
+   * run of quick taps costs one round trip, not sixteen.
+   */
+  const scheduleRefresh = useCallback(() => {
+    clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => router.refresh(), 1200);
+  }, [router]);
+
+  useEffect(() => () => clearTimeout(refreshTimer.current), []);
 
   const isLocked = useCallback(
     (game: GameVM) => game.locked || lockedNow[game.id] === true,
@@ -79,13 +95,14 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
 
         if (!res.ok) throw new Error(String(res.status));
         flash(game.id, "saved");
+        scheduleRefresh();
       } catch {
         revert(game.id, previous);
         flash(game.id, "error");
         setNotice("Could not save that pick. Check your connection and tap again.");
       }
     },
-    [flash, isLocked, picks, revert]
+    [flash, isLocked, picks, revert, scheduleRefresh]
   );
 
   /**
@@ -122,6 +139,7 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
 
           setPicks((prev) => ({ ...prev, ...applied }));
           setArmedBulk(null);
+          scheduleRefresh();
 
           const count = Object.keys(applied).length;
           const missing = targets.length - count;
@@ -135,7 +153,7 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
         }
       });
     },
-    [armedBulk, openGames, picks, season, week]
+    [armedBulk, openGames, picks, scheduleRefresh, season, week]
   );
 
   const groups = useMemo(() => groupByDay(games, (g) => new Date(g.kickoffAt)), [games]);
@@ -267,10 +285,13 @@ function GameCard({
           {saveState === "saving" && <span className="opacity-70">saving...</span>}
           {saveState === "saved" && <span className="text-[var(--accent)]">saved</span>}
           {saveState === "error" && <span className="text-[var(--loss)]">not saved</span>}
-          <span title="If the group ties 6-6, this side takes the parlay leg">
-            {"\u{1F0CF}"} {game.coinFlipAbbr}
+          <span
+            title="If the group splits 6-6, this side takes the parlay leg"
+            className="rounded bg-[var(--panel-2)] px-1.5 py-0.5"
+          >
+            tie &rarr; {game.coinFlipAbbr}
           </span>
-          {locked && <span>{"\u{1F512}"}</span>}
+          {locked && <span className="font-semibold">locked</span>}
         </span>
       </div>
 

@@ -17,7 +17,7 @@ API, so nothing has to be entered by hand.
   DraftKings line ESPN publishes). The first tap fills only the games you haven't picked; tap the
   same button again to confirm overwriting the ones you have.
 - **Ties are settled by a coin flip drawn in advance.** When the week is first loaded, every game
-  gets a random side assigned and shown on its card (`🃏 SEA`). If the group splits 6-6, that side
+  gets a random side assigned and shown on its card (`tie -> SEA`). If the group splits 6-6, that side
   takes the parlay leg. Because it's drawn and displayed before anyone votes, nobody can game it.
 - **The screen you land on follows the season, not the clock.** Any unlocked game you haven't
   picked puts you on Picks; otherwise you land on Results. So Monday and Tuesday show results,
@@ -70,6 +70,7 @@ forces a resync by hand.
 | --- | --- |
 | `npm run dev` | Local dev server |
 | `npm test` | Grading, standings and consensus checks (no database needed) |
+| `npm run test:db` | End-to-end checks against the real database (writes and cleans up after itself) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm run db:push` | Apply the schema to Postgres |

@@ -110,10 +110,18 @@ export default function ParlayPanel({ week, legs, memberCount }: Props) {
                 {i + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-base font-bold">
+                <p className="flex items-center gap-1.5 text-base font-bold">
                   {leg.sideAbbr}
                   {leg.isFavorite && leg.spread !== null && (
-                    <span className="ml-1.5 text-xs font-normal text-[var(--muted)]">-{leg.spread}</span>
+                    <span className="text-xs font-normal text-[var(--muted)]">-{leg.spread}</span>
+                  )}
+                  {leg.decidedByCoinFlip && (
+                    <span
+                      title="The group split evenly, so this game's pre-drawn coin flip decided the leg"
+                      className="rounded bg-[var(--panel-2)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--warn)]"
+                    >
+                      coin flip
+                    </span>
                   )}
                 </p>
                 <p className="truncate text-[11px] text-[var(--muted)]">
@@ -126,16 +134,22 @@ export default function ParlayPanel({ week, legs, memberCount }: Props) {
                     ? "no votes"
                     : `${Math.max(leg.homeVotes, leg.awayVotes)}/${leg.totalVotes}`}
                 </p>
-                <p className="text-[10px] text-[var(--muted)]">
-                  {leg.decidedByCoinFlip
-                    ? "\u{1F0CF} coin flip"
-                    : leg.result === "win"
-                      ? "hit"
+                <p
+                  className={`text-[10px] font-semibold ${
+                    leg.result === "win"
+                      ? "text-[var(--accent)]"
                       : leg.result === "loss"
-                        ? "missed"
-                        : leg.result === "push"
-                          ? "push"
-                          : "pending"}
+                        ? "text-[var(--loss)]"
+                        : "text-[var(--muted)]"
+                  }`}
+                >
+                  {leg.result === "win"
+                    ? "hit"
+                    : leg.result === "loss"
+                      ? "missed"
+                      : leg.result === "push"
+                        ? "push"
+                        : "pending"}
                 </p>
               </div>
             </div>

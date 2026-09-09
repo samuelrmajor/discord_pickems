@@ -10,7 +10,8 @@
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts",
     "test": "tsx scripts/test-scoring.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:db": "tsx scripts/verify-db.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

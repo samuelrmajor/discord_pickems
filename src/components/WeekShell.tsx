@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { logout } from "@/app/login/actions";
 
 export type TabKey = "picks" | "results" | "parlay";
 
@@ -46,12 +47,14 @@ export default function WeekShell({
     <div className="mx-auto min-h-dvh w-full max-w-lg">
       <header className="border-b border-[var(--line)] bg-[var(--bg)]">
         <div className="flex items-center justify-between px-3 pt-3">
-          <Link href="/login" className="text-xs text-[var(--muted)]">
-            <span className="font-semibold capitalize text-[var(--text)]">
-              {user.replace("_", " ")}
-            </span>
-            <span className="pl-1.5 opacity-70">switch</span>
-          </Link>
+          <form action={logout}>
+            <button type="submit" className="text-xs text-[var(--muted)]">
+              <span className="font-semibold capitalize text-[var(--text)]">
+                {user.replace("_", " ")}
+              </span>
+              <span className="pl-1.5 opacity-70">switch</span>
+            </button>
+          </form>
 
           <div className="flex items-center gap-1">
             <WeekArrow to={week - 1} disabled={week <= first} label="Previous week">
