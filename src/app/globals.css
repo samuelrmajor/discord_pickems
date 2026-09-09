@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0f14;
+  --panel: #141b24;
+  --panel-2: #1c2530;
+  --line: #253040;
+  --text: #e8edf4;
+  --muted: #8c9aad;
+  --accent: #3ddc84;
+  --accent-ink: #06210f;
+  --loss: #ff5f6d;
+  --warn: #ffc857;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel-2);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accentink: var(--accent-ink);
+  --color-loss: var(--loss);
+  --color-warn: var(--warn);
+}
+
+html {
+  background: var(--bg);
+  /* Keep the sticky bulk bar clear of the iOS home indicator. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overscroll-behavior-y: none;
+}
+
+/* Taps should feel instant, not "web page"-ish. */
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
