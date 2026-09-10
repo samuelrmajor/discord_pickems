@@ -1,11 +1,13 @@
 import type { GameVM } from "@/lib/view";
-import type { StandingRow } from "@/lib/scoring";
+import type { StandingRow, SubmissionRow } from "@/lib/scoring";
 import { groupByDay, timeShort } from "@/lib/format";
 import type { Side } from "@/lib/espn";
+import SubmissionRoster from "./SubmissionRoster";
 
 type Props = {
   currentUser: string;
   standings: StandingRow[];
+  submissions: SubmissionRow[];
   games: GameVM[];
   myPicks: Record<string, Side>;
   gradedCount: number;
@@ -14,6 +16,7 @@ type Props = {
 export default function ResultsPanel({
   currentUser,
   standings,
+  submissions,
   games,
   myPicks,
   gradedCount,
@@ -22,7 +25,13 @@ export default function ResultsPanel({
 
   return (
     <div className="pb-8">
-      <section className="px-2 pt-2">
+      <SubmissionRoster
+        currentUser={currentUser}
+        rows={submissions}
+        gameCount={games.length}
+      />
+
+      <section className="px-2 pt-3">
         <div className="flex items-baseline justify-between px-1 pb-1">
           <h2 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
             Standings

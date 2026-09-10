@@ -4,7 +4,12 @@
  */
 import assert from "node:assert/strict";
 import type { GameRow, PickRow } from "../src/db/schema";
-import { buildConsensus, buildStandings, recordFor } from "../src/lib/scoring";
+import {
+  buildConsensus,
+  buildStandings,
+  buildSubmissions,
+  recordFor,
+} from "../src/lib/scoring";
 
 let checks = 0;
 function check(label: string, fn: () => void) {
@@ -146,5 +151,61 @@ check("season totals are carried alongside the weekly record", () => {
   assert.deepEqual([row.wins, row.losses], [1, 0]);
   assert.deepEqual([row.seasonWins, row.seasonLosses], [2, 0]);
 });
+
+console.log("buildSubmissions");
+const NOW = new Date("2026-09-13T18:00:00Z").getTime();
+const openGame = (id: string) =>
+  game(id, { kickoffAt: new Date("2026-09-13T21:00:00Z"), winner: null, status: "scheduled" });
+const kickedOff = (id: string) => game(id, { kickoffAt: new Date("2026-09-13T17:00:00Z") });
+
+check("counts a full card as done and an empty one as outstanding", () => {
+  const games = [openGame("1"), openGame("2")];
+  const rows = buildSubmissions(
+    ["sam", "dom"],
+    games,
+    [pick("sam", "1", "home"), pick("sam", "2", "away")],
+    NOW
+  );
+  const [dom, sam] = rows;
+  assert.deepEqual([sam.name, sam.picked, sam.remaining, sam.done], ["sam", 2, 0, true]);
+  assert.deepEqual([dom.name, dom.picked, dom.remaining, dom.done], ["dom", 0, 2, false]);
+});
+
+check("games already kicked off count as missed, not remaining", () => {
+  const games = [kickedOff("1"), openGame("2")];
+  const [row] = buildSubmissions(["sam"], games, [], NOW);
+  assert.deepEqual([row.missed, row.remaining], [1, 1]);
+  assert.equal(row.done, false, "an open game is still outstanding");
+});
+
+check("a card that can no longer be finished is done but not full", () => {
+  const games = [kickedOff("1"), kickedOff("2")];
+  const [row] = buildSubmissions(["sam"], games, [pick("sam", "1", "home")], NOW);
+  assert.deepEqual([row.picked, row.remaining, row.missed], [1, 0, 1]);
+  assert.equal(row.done, true, "nothing left to pick");
+});
+
+check("picks from another week do not count toward this one", () => {
+  const games = [openGame("1")];
+  const rows = buildSubmissions(["sam"], games, [pick("sam", "99", "home")], NOW);
+  assert.equal(rows[0].picked, 0);
+});
+
+check("outstanding cards sort to the top, emptiest first", () => {
+  const games = [openGame("1"), openGame("2"), openGame("3")];
+  const rows = buildSubmissions(
+    ["sam", "dom", "pat"],
+    games,
+    [
+      pick("sam", "1", "home"),
+      pick("sam", "2", "home"),
+      pick("sam", "3", "home"),
+      pick("pat", "1", "home"),
+    ],
+    NOW
+  );
+  assert.deepEqual(rows.map((r) => r.name), ["dom", "pat", "sam"]);
+});
+
 
 console.log(`\n${checks} checks passed.`);

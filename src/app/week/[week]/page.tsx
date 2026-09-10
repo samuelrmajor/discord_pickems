@@ -11,7 +11,7 @@ import {
   getWeekGames,
   getWeekPicks,
 } from "@/lib/queries";
-import { buildConsensus, buildStandings } from "@/lib/scoring";
+import { buildConsensus, buildStandings, buildSubmissions } from "@/lib/scoring";
 import { getCurrentUser } from "@/lib/session";
 import { ensureWeekFresh } from "@/lib/sync";
 import { USERS } from "@/lib/users";
@@ -58,6 +58,7 @@ export default async function WeekPage({ params }: { params: Promise<{ week: str
   }
 
   const standings = buildStandings(USERS, weekGames, weekPicks, seasonGames, seasonPicks);
+  const submissions = buildSubmissions(USERS, weekGames, weekPicks);
   const legs = buildConsensus(weekGames, weekPicks).map(toLegVM);
 
   const gradedCount = weekGames.filter((g) => g.winner !== null).length;
@@ -91,6 +92,7 @@ export default async function WeekPage({ params }: { params: Promise<{ week: str
         <ResultsPanel
           currentUser={user}
           standings={standings}
+          submissions={submissions}
           games={gameVMs}
           myPicks={myPicks}
           gradedCount={gradedCount}
