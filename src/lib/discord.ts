@@ -24,6 +24,16 @@ export type Embed = {
 export type DiscordMessage = {
   content?: string;
   embeds?: Embed[];
+  /**
+   * Discord user IDs to actually notify. Anyone mentioned in `content` who is
+   * not listed here renders as a mention but pings nobody.
+   */
+  mentions?: string[];
+  /**
+   * Ping the whole server. Off by default — this notifies every member, so it
+   * belongs on the handful of posts the league actually wants interrupting them.
+   */
+  everyone?: boolean;
 };
 
 export class DiscordNotConfigured extends Error {
@@ -37,10 +47,38 @@ function clamp(text: string, limit: number): string {
   return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
 }
 
+/**
+ * A user mention. Discord wants the numeric ID, not the username: turn on
+ * Developer Mode (Settings -> Advanced) and right-click a member -> Copy User ID.
+ *
+ * Only works in `content`. In an embed it renders as a mention but notifies
+ * nobody, which looks correct and silently fails.
+ */
+export function mention(discordUserId: string): string {
+  return `<@${discordUserId}>`;
+}
+
 export async function postToDiscord(message: DiscordMessage): Promise<void> {
   if (!WEBHOOK) throw new DiscordNotConfigured();
 
-  const body: DiscordMessage = {
+  /**
+   * Notify exactly who was asked for and nobody else.
+   *
+   * `parse` stays empty unless `everyone` is set, and never includes "roles":
+   * an unparsed mention still renders, it just doesn't fire. The explicit
+   * `users` list is the only way an individual gets pinged.
+   *
+   * Team names come from Sleeper and are whatever people typed, so one of them
+   * could contain a literal "@everyone" — but names only ever appear in the
+   * embed, and embed mentions don't notify. `content` is ours alone.
+   */
+  const allowed_mentions = {
+    parse: message.everyone ? ["everyone"] : [],
+    users: message.mentions ?? [],
+  };
+
+  const body = {
+    allowed_mentions,
     ...(message.content ? { content: clamp(message.content, CONTENT_LIMIT) } : {}),
     ...(message.embeds
       ? {

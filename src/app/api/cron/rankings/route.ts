@@ -5,6 +5,7 @@ import { fantasyCache } from "@/db/schema";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 import { DiscordNotConfigured, postToDiscord } from "@/lib/discord";
 import { consensusForWeek, getWeekBallots } from "@/lib/fantasy/ballots";
+import { discordNameFor } from "@/lib/fantasy/config";
 import { buildConsensus, type ConsensusRow } from "@/lib/fantasy/rankings";
 import { readSnapshot, type ProfileCard } from "@/lib/fantasy/snapshot";
 import { buildWeeks, currentRankingWeek, phaseOf } from "@/lib/fantasy/week";
@@ -86,7 +87,15 @@ export async function GET(request: Request) {
     const rows = buildConsensus(ballots, previous ?? undefined);
     const cards = new Map(snapshot.profiles.map((p) => [p.name as string, p]));
 
+    // Announce to the channel, and tag Sam directly. `discordNameFor` falls
+    // back to a bold name for anyone whose Discord id isn't in config.json yet,
+    // so this reads correctly before the ids are filled in — it just won't ping.
+    const sam = discordNameFor("sam");
+
     await postToDiscord({
+      content: `@everyone ${sam.text} Week ${week} power rankings are final.`,
+      everyone: true,
+      mentions: sam.id ? [sam.id] : [],
       embeds: [
         {
           title: `Week ${week} Power Rankings`,
