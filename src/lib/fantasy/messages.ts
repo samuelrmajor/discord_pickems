@@ -94,6 +94,21 @@ export function nudgeMessage(
   };
 }
 
+/**
+ * Re-shape a real post into a test post.
+ *
+ * Marked so nobody in the channel acts on it, and silent by default: a smoke
+ * test of the workflow should not buzz eleven phones. Pass `ping` to exercise
+ * the mentions for real.
+ */
+export function asTestPost(message: DiscordMessage, ping: boolean): DiscordMessage {
+  return {
+    ...message,
+    content: `\u{1F9EA} **Test post** — ignore.\n${message.content ?? ""}`,
+    ...(ping ? {} : { mentions: [], everyone: false }),
+  };
+}
+
 function movement(delta: number | null): string {
   if (delta === null) return "  ";
   if (delta === 0) return " -";

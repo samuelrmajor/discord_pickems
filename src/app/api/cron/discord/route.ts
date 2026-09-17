@@ -4,10 +4,11 @@ import { db } from "@/db";
 import { fantasyCache } from "@/db/schema";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 import { DiscordNotConfigured, postToDiscord, type DiscordMessage } from "@/lib/discord";
-import { dueJobs, type JobDef } from "@/lib/fantasy/announcements";
+import { dueJobs, JOBS, type JobDef } from "@/lib/fantasy/announcements";
 import { consensusForWeek, getWeekBallots } from "@/lib/fantasy/ballots";
 import { MEMBERS } from "@/lib/fantasy/config";
 import {
+  asTestPost,
   nudgeMessage,
   resultsMessage,
   votingOpenMessage,
@@ -16,7 +17,7 @@ import {
 import { buildConsensus } from "@/lib/fantasy/rankings";
 import { readSnapshot } from "@/lib/fantasy/snapshot";
 import { notifiableUsers } from "@/lib/notifications";
-import { buildWeeks, currentRankingWeek } from "@/lib/fantasy/week";
+import { buildWeeks, currentRankingWeek, type RankingWeek } from "@/lib/fantasy/week";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,16 @@ export async function GET(request: Request) {
 
   const weeks = buildWeeks(snapshot.seasonStartDate);
   const week = weeks[currentRankingWeek(weeks) - 1];
+
+  const params = new URL(request.url).searchParams;
+  const forced = params.get("job");
+  if (forced) {
+    return forceOne(forced, snapshot, week, {
+      dry: params.get("dry") === "1",
+      ping: params.get("ping") === "1",
+    });
+  }
+
   const due = dueJobs(week);
   if (due.length === 0) {
     return NextResponse.json({ week: week.week, due: [], sent: [] });
@@ -98,6 +109,46 @@ export async function GET(request: Request) {
 }
 
 type Snapshot = NonNullable<Awaited<ReturnType<typeof readSnapshot>>>;
+
+/**
+ * Send one post on demand, for testing the pipeline end to end.
+ *
+ * Deliberately claim-free: a test must not consume the week's real post, or
+ * trying the results message on a Tuesday would leave Thursday silent. It also
+ * strips mentions unless `ping=1`, so a smoke test doesn't buzz eleven phones,
+ * and marks the message as a test so nobody in the channel acts on it.
+ */
+async function forceOne(
+  jobId: string,
+  snapshot: Snapshot,
+  week: RankingWeek,
+  opts: { dry: boolean; ping: boolean }
+) {
+  const job = JOBS.find((j) => j.id === jobId);
+  if (!job) {
+    return NextResponse.json(
+      { error: `unknown job "${jobId}"`, valid: JOBS.map((j) => j.id) },
+      { status: 400 }
+    );
+  }
+
+  const built = await buildMessage(job, snapshot, week.week, week.locksAt);
+  if (!built) {
+    return NextResponse.json({
+      forced: job.id,
+      skipped: "nothing to say for this job right now",
+    });
+  }
+
+  const message = asTestPost(built, opts.ping);
+
+  if (opts.dry) {
+    return NextResponse.json({ forced: job.id, dry: true, message });
+  }
+
+  await postToDiscord(message);
+  return NextResponse.json({ forced: job.id, sent: true, pinged: opts.ping });
+}
 
 /**
  * The league as the posts see it: who to ping, who to merely name, and who has

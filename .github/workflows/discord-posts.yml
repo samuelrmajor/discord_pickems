@@ -6,19 +6,43 @@
 # Instead this pokes the app every half hour and the app decides, in Eastern
 # time, which posts are due:
 #
-#   Tue 10:00am  @everyone - voting is open
-#   Tue  7:00pm  @ whoever hasn't locked in
-#   Wed  7:00pm  @ whoever hasn't locked in
-#   Thu  5:00pm  @ whoever hasn't locked in (last call)
-#   Thu  6:00pm  @everyone - voting closed, results
+#   Tue 10:00am  voting is open
+#   Tue  7:00pm  whoever hasn't locked in
+#   Wed  7:00pm  whoever hasn't locked in
+#   Thu  5:00pm  whoever hasn't locked in (last call)
+#   Thu  6:00pm  voting closed, results
 #
 # Each post is claimed atomically, so the repeated pokes can't duplicate one.
+#
+# Run it by hand from the Actions tab to test: pick a post under "job" and it
+# is sent immediately, marked as a test and with pings off unless you ask for
+# them. A forced send never consumes the week's real post.
 name: Discord posts
 
 on:
   schedule:
     - cron: "*/30 * * * *"
-  workflow_dispatch: # fire it by hand from the Actions tab
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which post to send (scheduled = normal behaviour)"
+        type: choice
+        default: scheduled
+        options:
+          - scheduled
+          - open
+          - nudge-tue
+          - nudge-wed
+          - nudge-thu
+          - results
+      ping:
+        description: "Actually ping people (off = names only)"
+        type: boolean
+        default: false
+      dry:
+        description: "Build the message but do not post it"
+        type: boolean
+        default: false
 
 # A slow run must not overlap the next tick.
 concurrency:
@@ -33,6 +57,9 @@ jobs:
         env:
           APP_URL: ${{ vars.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB: ${{ inputs.job }}
+          PING: ${{ inputs.ping }}
+          DRY: ${{ inputs.dry }}
         run: |
           set -euo pipefail
 
@@ -41,8 +68,18 @@ jobs:
             exit 1
           fi
 
+          url="${APP_URL}/api/cron/discord"
+
+          # `inputs` is empty on a scheduled run, which is the normal path.
+          if [ -n "${JOB:-}" ] && [ "${JOB}" != "scheduled" ]; then
+            url="${url}?job=${JOB}"
+            if [ "${PING:-false}" = "true" ]; then url="${url}&ping=1"; fi
+            if [ "${DRY:-false}" = "true" ]; then url="${url}&dry=1"; fi
+            echo "Forcing: ${JOB} (ping=${PING:-false} dry=${DRY:-false})"
+          fi
+
           # --fail-with-body so a non-2xx still shows what the app said.
           curl --fail-with-body --silent --show-error --max-time 60 \
             --header "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL}/api/cron/discord"
+            "${url}"
           echo

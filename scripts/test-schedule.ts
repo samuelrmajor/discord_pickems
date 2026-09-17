@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { dueJobs, JOBS, scheduledAt } from "../src/lib/fantasy/announcements";
 import { MEMBER_NAMES } from "../src/lib/fantasy/config";
 import {
+  asTestPost,
   nudgeMessage,
   resultsMessage,
   votingOpenMessage,
@@ -196,6 +197,45 @@ check("one dissenting ballot moves a unanimous average off 1.00", () => {
   // And that is the number the board prints.
   const printed = resultsMessage(3, split, new Map(), 12, [person({ name: "sam" })]);
   assert.ok(printed.embeds![0].description!.includes("1.92"), printed.embeds![0].description);
+});
+
+console.log("\nmanual test sends");
+
+check("a test post is marked and stays silent by default", () => {
+  const league = [person({ name: "sam" }), person({ name: "gus" })];
+  const real = votingOpenMessage(3, LOCKS, league);
+  assert.deepEqual(real.mentions, ["id-sam", "id-gus"], "the real post would ping both");
+
+  const test = asTestPost(real, false);
+  assert.ok(test.content!.startsWith("\u{1F9EA} **Test post**"));
+  assert.deepEqual(test.mentions, [], "a test must not ping anyone");
+  assert.equal(test.everyone, false);
+  // The body is still the real message, so the test shows what will be sent.
+  assert.ok(test.content!.includes("Week 3 power rankings are open"));
+  assert.ok(test.content!.includes("<@id-sam>"), "names still render, they just don't fire");
+});
+
+check("ping=1 exercises the real mentions", () => {
+  const league = [person({ name: "sam" }), person({ name: "gus", notify: false })];
+  const test = asTestPost(votingOpenMessage(3, LOCKS, league), true);
+  assert.deepEqual(test.mentions, ["id-sam"], "still honours mutes");
+  assert.ok(test.content!.includes("gus FC"));
+});
+
+check("a test of the results post keeps its embed", () => {
+  const ballot = (voter: string): Ballot => ({
+    voter,
+    order: normalizeOrder([...MEMBER_NAMES]),
+    lockedIn: true,
+    updatedAt: new Date(),
+  });
+  const real = resultsMessage(3, buildConsensus([ballot("sam")]), new Map(), 1, [
+    person({ name: "sam" }),
+  ]);
+  const test = asTestPost(real, false);
+  assert.equal(test.embeds!.length, 1);
+  assert.equal(test.embeds![0].title, "Week 3 Power Rankings");
+  assert.deepEqual(test.mentions, []);
 });
 
 console.log(`\n${checks} checks passed.`);
