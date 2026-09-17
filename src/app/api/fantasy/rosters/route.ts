@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readRosters } from "@/lib/fantasy/snapshot";
+import { canSeeModule } from "@/lib/modules";
 import { getCurrentUser } from "@/lib/session";
 
 /**
@@ -12,8 +13,10 @@ import { getCurrentUser } from "@/lib/session";
  * the current one plus its version, and the client re-keys its cache.
  */
 export async function GET(request: Request) {
-  if (!(await getCurrentUser())) {
-    return NextResponse.json({ error: "not logged in" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "not logged in" }, { status: 401 });
+  if (!canSeeModule(user, "fantasy")) {
+    return NextResponse.json({ error: "not available" }, { status: 403 });
   }
 
   const data = await readRosters();

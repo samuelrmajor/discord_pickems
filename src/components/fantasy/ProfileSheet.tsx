@@ -95,11 +95,7 @@ export default function ProfileSheet({ profile, rosters, rostersFailed, onClose 
         <div className="grid grid-cols-3 gap-2 px-4">
           <Stat label="Points for" value={pts(profile.pointsFor)} />
           <Stat label="Points against" value={pts(profile.pointsAgainst)} />
-          <Stat
-            label="Max possible"
-            value={pts(profile.potentialPoints)}
-            hint={profile.streak ? `${profile.streak} streak` : undefined}
-          />
+          <Stat label="Max possible" value={pts(profile.potentialPoints)} />
         </div>
 
         {profile.lastResult && (
@@ -147,13 +143,11 @@ export default function ProfileSheet({ profile, rosters, rostersFailed, onClose 
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-[var(--panel)] px-2 py-2 text-center">
       <p className="text-[15px] font-bold tabular-nums leading-tight">{value}</p>
-      <p className="mt-0.5 text-[9px] uppercase tracking-wide text-[var(--muted)]">
-        {hint ?? label}
-      </p>
+      <p className="mt-0.5 text-[9px] uppercase tracking-wide text-[var(--muted)]">{label}</p>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { MEMBER_NAMES } from "@/lib/fantasy/config";
 import { saveBallot } from "@/lib/fantasy/ballots";
 import { readSnapshot } from "@/lib/fantasy/snapshot";
+import { canSeeModule } from "@/lib/modules";
 import { buildWeeks, currentRankingWeek, phaseOf } from "@/lib/fantasy/week";
 import { getCurrentUser } from "@/lib/session";
 
@@ -20,6 +21,7 @@ export async function submitBallot(
 ): Promise<SaveResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "not signed in" };
+  if (!canSeeModule(user, "fantasy")) return { ok: false, error: "not available" };
   if (!MEMBER_NAMES.includes(user as never)) {
     return { ok: false, error: "not in the fantasy league" };
   }

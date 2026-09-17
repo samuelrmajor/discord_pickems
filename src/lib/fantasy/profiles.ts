@@ -44,7 +44,6 @@ export type Profile = {
   pointsFor: number;
   pointsAgainst: number;
   potentialPoints: number;
-  streak: string | null;
   lastResult: LastResult | null;
   starters: RosterLine[];
   bench: RosterLine[];
@@ -165,7 +164,6 @@ export function buildProfiles(
       pointsFor: roster?.pointsFor ?? 0,
       pointsAgainst: roster?.pointsAgainst ?? 0,
       potentialPoints: roster?.potentialPoints ?? 0,
-      streak: roster?.streak ?? null,
       lastResult:
         roster && lastScoredWeek > 0
           ? lastResultFor(roster.rosterId, lastScoredWeek, matchups, teamNameOf)

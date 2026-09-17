@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logout } from "@/app/login/actions";
-import { MODULES } from "@/lib/modules";
+import { modulesFor } from "@/lib/modules";
 import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export default async function Home() {
       </header>
 
       <nav className="mt-4 grid gap-2">
-        {MODULES.map((mod) => {
+        {modulesFor(user).map((mod) => {
           const body = (
             <>
               <span

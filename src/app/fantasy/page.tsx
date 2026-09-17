@@ -6,6 +6,7 @@ import { consensusForWeek, getStartingOrder, getWeekBallots } from "@/lib/fantas
 import { buildConsensus } from "@/lib/fantasy/rankings";
 import { readCards, snapshotIsStale } from "@/lib/fantasy/snapshot";
 import { buildWeeks, currentRankingWeek, phaseOf } from "@/lib/fantasy/week";
+import { canSeeModule } from "@/lib/modules";
 import { ensureUsersSeeded } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/session";
 
@@ -16,6 +17,7 @@ type Props = { searchParams: Promise<{ week?: string }> };
 export default async function FantasyPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (!canSeeModule(user, "fantasy")) redirect("/");
 
   await ensureUsersSeeded();
 

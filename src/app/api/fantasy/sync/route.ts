@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { refreshSnapshot } from "@/lib/fantasy/snapshot";
+import { canSeeModule } from "@/lib/modules";
 import { getCurrentUser } from "@/lib/session";
 
 /**
@@ -11,8 +12,10 @@ import { getCurrentUser } from "@/lib/session";
  * visit is cheap.
  */
 export async function POST() {
-  if (!(await getCurrentUser())) {
-    return NextResponse.json({ error: "not logged in" }, { status: 401 });
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "not logged in" }, { status: 401 });
+  if (!canSeeModule(user, "fantasy")) {
+    return NextResponse.json({ error: "not available" }, { status: 403 });
   }
 
   try {

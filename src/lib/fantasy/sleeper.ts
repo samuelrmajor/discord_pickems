@@ -109,7 +109,6 @@ export type SleeperRoster = {
   pointsAgainst: number;
   /** Maximum possible points — what an optimal lineup would have scored. */
   potentialPoints: number;
-  streak: string | null;
 };
 
 /** Sleeper stores 159.66 as `{ fpts: 159, fpts_decimal: 66 }`. */
@@ -121,7 +120,6 @@ export async function fetchRosters(leagueId: string): Promise<SleeperRoster[]> {
   const rows = await get<Json[]>(`/league/${leagueId}/rosters`);
   return rows.map((r) => {
     const s = (r.settings ?? {}) as Json;
-    const meta = (r.metadata ?? {}) as Json;
     return {
       rosterId: Number(r.roster_id),
       ownerId: str(r.owner_id),
@@ -133,7 +131,6 @@ export async function fetchRosters(leagueId: string): Promise<SleeperRoster[]> {
       pointsFor: points(s, "fpts"),
       pointsAgainst: points(s, "fpts_against"),
       potentialPoints: points(s, "ppts"),
-      streak: str(meta.streak),
     };
   });
 }
