@@ -47,14 +47,24 @@ export default function WeekShell({
     <div className="mx-auto min-h-dvh w-full max-w-lg">
       <header className="border-b border-[var(--line)] bg-[var(--bg)]">
         <div className="flex items-center justify-between px-2 pt-1.5">
-          <form action={logout}>
-            <button type="submit" className="px-1 text-[11px] text-[var(--muted)]">
-              <span className="font-semibold capitalize text-[var(--text)]">
-                {user.replace("_", " ")}
-              </span>
-              <span className="pl-1 opacity-70">switch</span>
-            </button>
-          </form>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/"
+              aria-label="All modules"
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--panel)]
+                         text-base leading-none active:scale-95"
+            >
+              &lsaquo;
+            </Link>
+            <form action={logout}>
+              <button type="submit" className="px-1 text-[11px] text-[var(--muted)]">
+                <span className="font-semibold capitalize text-[var(--text)]">
+                  {user.replace("_", " ")}
+                </span>
+                <span className="pl-1 opacity-70">switch</span>
+              </button>
+            </form>
+          </div>
 
           <div className="flex items-center gap-1">
             <WeekArrow to={week - 1} disabled={week <= first} label="Previous week">
@@ -127,7 +137,7 @@ function WeekArrow({
     );
   }
   return (
-    <Link href={`/week/${to}`} aria-label={label} className={`${cls} active:scale-95`}>
+    <Link href={`/pickems/week/${to}`} aria-label={label} className={`${cls} active:scale-95`}>
       {children}
     </Link>
   );
