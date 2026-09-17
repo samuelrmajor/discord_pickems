@@ -30,10 +30,10 @@ console.log("\nweek windows");
 
 const WEEKS = buildWeeks("2026-09-09");
 
-check("every week opens Tuesday 1:00 AM and locks Thursday 5:00 PM ET", () => {
+check("every week opens Tuesday 1:00 AM and locks Thursday 6:00 PM ET", () => {
   for (const w of WEEKS) {
     assert.equal(ET(w.opensAt), "Tue 1:00 AM", `week ${w.week} open`);
-    assert.equal(ET(w.locksAt), "Thu 5:00 PM", `week ${w.week} lock`);
+    assert.equal(ET(w.locksAt), "Thu 6:00 PM", `week ${w.week} lock`);
   }
 });
 

@@ -1,0 +1,48 @@
+# Drives every scheduled Discord post for the power-rankings module.
+#
+# There is deliberately only one schedule here, and it is not the schedule.
+# GitHub's cron is UTC-only and has no notion of US daylight saving, so pinning
+# posts to UTC hours would silently shift them all by an hour every November.
+# Instead this pokes the app every half hour and the app decides, in Eastern
+# time, which posts are due:
+#
+#   Tue 10:00am  @everyone - voting is open
+#   Tue  7:00pm  @ whoever hasn't locked in
+#   Wed  7:00pm  @ whoever hasn't locked in
+#   Thu  5:00pm  @ whoever hasn't locked in (last call)
+#   Thu  6:00pm  @everyone - voting closed, results
+#
+# Each post is claimed atomically, so the repeated pokes can't duplicate one.
+name: Discord posts
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: # fire it by hand from the Actions tab
+
+# A slow run must not overlap the next tick.
+concurrency:
+  group: discord-posts
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send any posts that are due
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${APP_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::APP_URL variable and CRON_SECRET secret must both be set"
+            exit 1
+          fi
+
+          # --fail-with-body so a non-2xx still shows what the app said.
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL}/api/cron/discord"
+          echo

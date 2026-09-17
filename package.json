@@ -10,7 +10,7 @@
     "db:push": "drizzle-kit push",
     "db:sql": "tsx scripts/apply-sql.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "test": "tsx scripts/test-scoring.ts && tsx scripts/test-fantasy.ts",
+    "test": "tsx scripts/test-scoring.ts && tsx scripts/test-fantasy.ts && tsx scripts/test-schedule.ts",
     "typecheck": "tsc --noEmit",
     "test:db": "tsx scripts/verify-db.ts"
   },

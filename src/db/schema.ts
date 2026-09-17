@@ -112,3 +112,25 @@ export const ballots = pgTable(
 
 export type FantasyCacheRow = typeof fantasyCache.$inferSelect;
 export type BallotRow = typeof ballots.$inferSelect;
+
+/**
+ * Per-user, per-module opt-out of Discord pings.
+ *
+ * An absent row means enabled: people shouldn't have to opt in to hear about
+ * the thing they signed up for, and a brand-new module shouldn't be silent for
+ * everyone until they each go and switch it on.
+ */
+export const notificationPrefs = pgTable(
+  "notification_prefs",
+  {
+    userName: text("user_name")
+      .notNull()
+      .references(() => users.name, { onDelete: "cascade" }),
+    moduleKey: text("module_key").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userName, t.moduleKey] })]
+);
+
+export type NotificationPrefRow = typeof notificationPrefs.$inferSelect;

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { logout } from "@/app/login/actions";
+import NotificationSwitch from "@/components/NotificationSwitch";
 import { modulesFor } from "@/lib/modules";
+import { getPrefsForUser } from "@/lib/notifications";
 import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
+  // Absent means enabled, so anything not switched off reads as on.
+  const prefs = await getPrefsForUser(user);
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-lg px-3 pb-10 pt-4">
@@ -61,16 +66,31 @@ export default async function Home() {
             </>
           );
 
-          const cls =
-            "flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-3 text-left";
+          const cls = "flex min-w-0 items-center gap-3 p-3 text-left";
 
-          return mod.live ? (
-            <Link key={mod.key} href={mod.href} className={`${cls} transition active:scale-[0.99] active:bg-[var(--panel-2)]`}>
-              {body}
-            </Link>
-          ) : (
-            <div key={mod.key} aria-disabled className={`${cls} opacity-50`}>
-              {body}
+          // The switch sits outside the link so tapping it never navigates.
+          return (
+            <div
+              key={mod.key}
+              className="flex items-center gap-1 rounded-2xl border border-[var(--line)] bg-[var(--panel)] pr-1.5"
+            >
+              {mod.live ? (
+                <Link
+                  href={mod.href}
+                  className={`${cls} flex-1 rounded-2xl transition active:scale-[0.99] active:bg-[var(--panel-2)]`}
+                >
+                  {body}
+                </Link>
+              ) : (
+                <div aria-disabled className={`${cls} flex-1 opacity-50`}>
+                  {body}
+                </div>
+              )}
+              <NotificationSwitch
+                moduleKey={mod.key}
+                moduleName={mod.name}
+                enabled={prefs[mod.key] ?? true}
+              />
             </div>
           );
         })}
