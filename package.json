@@ -9,7 +9,7 @@
     "lint": "eslint",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts",
-    "test": "tsx scripts/test-scoring.ts",
+    "test": "tsx scripts/test-scoring.ts && tsx scripts/test-fantasy.ts",
     "typecheck": "tsc --noEmit",
     "test:db": "tsx scripts/verify-db.ts"
   },

@@ -21,4 +21,12 @@ export const MODULES: ModuleDef[] = [
     glyph: "P",
     live: true,
   },
+  {
+    key: "fantasy",
+    name: "Power Rankings",
+    tagline: "Rank the fantasy league each week; results open Thursday",
+    href: "/fantasy",
+    glyph: "☰",
+    live: true,
+  },
 ];

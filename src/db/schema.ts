@@ -1,6 +1,8 @@
 import {
+  boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   real,
@@ -69,3 +71,44 @@ export const picks = pgTable(
 
 export type GameRow = typeof games.$inferSelect;
 export type PickRow = typeof picks.$inferSelect;
+
+/**
+ * Raw-ish payloads pulled from Sleeper, one row per logical resource
+ * ("league", "players", "matchups:2026:3", ...). Sleeper has no ETags and the
+ * player dump is 11MB, so we slim each payload on ingest and let the DB be the
+ * cache — it survives cold lambdas and deploys, unlike an in-process Map.
+ */
+export const fantasyCache = pgTable("fantasy_cache", {
+  key: text("key").primaryKey(),
+  payload: jsonb("payload").notNull(),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * One member's power-ranking ballot for one week.
+ *
+ * `order` is the full list of league member names, best first. Storing the
+ * ordering rather than a row per (voter, ranked) pair keeps a ballot atomic:
+ * a reorder is one write, and a half-applied ballot can't exist.
+ */
+export const ballots = pgTable(
+  "ballots",
+  {
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    voter: text("voter")
+      .notNull()
+      .references(() => users.name, { onDelete: "cascade" }),
+    order: text("order").array().notNull(),
+    /** The explicit "I'm done" flag. Editing stays open until the week locks. */
+    lockedIn: boolean("locked_in").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.season, t.week, t.voter] }),
+    index("ballots_season_week_idx").on(t.season, t.week),
+  ]
+);
+
+export type FantasyCacheRow = typeof fantasyCache.$inferSelect;
+export type BallotRow = typeof ballots.$inferSelect;

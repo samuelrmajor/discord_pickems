@@ -1,0 +1,17 @@
+{
+    "league_id":"1314048577193902080",
+    "users": {
+        "Sam": {"sleeper_user_id": "705735271559278592"},
+        "Dom": {"sleeper_user_id": "706561545185873920"},
+        "Pat": {"sleeper_user_id": "991054728622632960"},
+        "Henry": {"sleeper_user_id": "1000277109383741440"},
+        "Josh": {"sleeper_user_id": "997734664909426688"},
+        "Ido": {"sleeper_user_id": "687754934711578624"},
+        "Jackson":{"sleeper_user_id": "702265426192691200"},
+        "Evan":{"sleeper_user_id": "991189236026073088"},
+        "Chase":{"sleeper_user_id": "870539072857382912"},
+        "David W":{"sleeper_user_id": "997726544653021184"},
+        "David D":{"sleeper_user_id": "991188791635357696"},
+        "Gus":{"sleeper_user_id": "687848648419119104"}
+    }
+}
