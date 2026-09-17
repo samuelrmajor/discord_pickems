@@ -24,7 +24,14 @@ function pts(n: number): string {
   return n.toFixed(1);
 }
 
-/** Bottom sheet with one manager's fantasy profile. */
+/**
+ * Full-screen panel with one manager's fantasy profile.
+ *
+ * Full screen rather than a partial sheet: the rosters are long enough to need
+ * their own scroll, and a sheet that scrolls internally reads as if it should
+ * also be draggable by its edge. One explicit close button, no gesture to
+ * discover.
+ */
 export default function ProfileSheet({ profile, rosters, rostersFailed, onClose }: Props) {
   // Escape is free to support and costs nothing on touch.
   useEffect(() => {
@@ -38,48 +45,53 @@ export default function ProfileSheet({ profile, rosters, rostersFailed, onClose 
   const record = `${profile.wins}-${profile.losses}${profile.ties ? `-${profile.ties}` : ""}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
-      <button
-        aria-label="Close profile"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60 [animation:fade-in_150ms_ease]"
-      />
-
-      <div
-        className="relative max-h-[85dvh] overflow-y-auto rounded-t-2xl border-t border-[var(--line)]
-                   bg-[var(--bg)] pb-[max(1rem,env(safe-area-inset-bottom))]
-                   [animation:sheet-up_220ms_cubic-bezier(0.22,1,0.36,1)]"
-      >
-        <div className="sticky top-0 z-10 bg-[var(--bg)] px-4 pb-3 pt-2">
-          <span aria-hidden className="mx-auto mb-3 block h-1 w-9 rounded-full bg-[var(--line)]" />
-
-          <div className="flex items-center gap-3">
-            {profile.avatarUrl ? (
-              // Sleeper's CDN is not in the remote-image allowlist.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={profile.avatarUrl}
-                alt=""
-                className="h-12 w-12 shrink-0 rounded-xl object-cover"
-              />
-            ) : (
-              <span className="h-12 w-12 shrink-0 rounded-xl bg-[var(--panel)]" />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[16px] font-bold leading-tight">{profile.teamName}</p>
-              <p className="truncate text-[12px] text-[var(--muted)]">
-                {profile.realName} &middot; @{profile.username}
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[15px] font-bold tabular-nums">{record}</p>
-              {profile.seed > 0 && (
-                <p className="text-[10px] uppercase text-[var(--muted)]">#{profile.seed} seed</p>
-              )}
-            </div>
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-[var(--bg)]
+                 [animation:sheet-up_220ms_cubic-bezier(0.22,1,0.36,1)]"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${profile.realName} profile`}
+    >
+      {/* The overlay sits outside <body>'s padding, so it owns its own insets. */}
+      <header className="shrink-0 border-b border-[var(--line)] px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
+        <div className="flex items-center gap-3">
+          {profile.avatarUrl ? (
+            // Sleeper's CDN is not in the remote-image allowlist.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={profile.avatarUrl}
+              alt=""
+              className="h-12 w-12 shrink-0 rounded-xl object-cover"
+            />
+          ) : (
+            <span className="h-12 w-12 shrink-0 rounded-xl bg-[var(--panel)]" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[16px] font-bold leading-tight">{profile.teamName}</p>
+            <p className="truncate text-[12px] text-[var(--muted)]">
+              {profile.realName} &middot; @{profile.username}
+            </p>
           </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[15px] font-bold tabular-nums">{record}</p>
+            {profile.seed > 0 && (
+              <p className="text-[10px] uppercase text-[var(--muted)]">#{profile.seed} seed</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close profile"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl
+                       bg-[var(--panel)] text-[15px] leading-none text-[var(--muted)]
+                       active:scale-95 active:bg-[var(--panel-2)]"
+          >
+            &#10005;
+          </button>
         </div>
+      </header>
 
+      <div className="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
         <div className="grid grid-cols-3 gap-2 px-4">
           <Stat label="Points for" value={pts(profile.pointsFor)} />
           <Stat label="Points against" value={pts(profile.pointsAgainst)} />

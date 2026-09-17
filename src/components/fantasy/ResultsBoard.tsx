@@ -2,12 +2,13 @@
 
 import type { ConsensusRow } from "@/lib/fantasy/rankings";
 import type { ProfileCard } from "@/lib/fantasy/profiles";
+import SubmissionList, { type Submission } from "./SubmissionList";
 
 type Props = {
   consensus: ConsensusRow[] | null;
   profiles: Map<string, ProfileCard>;
+  submissions: Submission[];
   ballotCount: number;
-  memberCount: number;
   locksLabel: string;
   onOpenProfile: (name: string) => void;
 };
@@ -15,26 +16,21 @@ type Props = {
 export default function ResultsBoard({
   consensus,
   profiles,
+  submissions,
   ballotCount,
-  memberCount,
   locksLabel,
   onOpenProfile,
 }: Props) {
+  // Before the lock this tab is the roll call: who has voted, never what they
+  // picked. The consensus simply isn't sent from the server until then.
   if (!consensus) {
     return (
-      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-        <span aria-hidden className="text-2xl">
-          &#128274;
-        </span>
-        <p className="mt-2 text-[14px] font-semibold">Results are sealed</p>
-        <p className="mt-1 text-[12px] leading-snug text-[var(--muted)]">
-          Everyone&apos;s ballots open at <span className="font-semibold">{locksLabel}</span>, when
-          voting closes. Until then you can see who has submitted, but not what they picked.
-        </p>
-        <p className="mt-3 text-[12px] font-semibold tabular-nums text-[var(--accent)]">
-          {ballotCount} of {memberCount} in
-        </p>
-      </div>
+      <SubmissionList
+        submissions={submissions}
+        profiles={profiles}
+        locksLabel={locksLabel}
+        locked={false}
+      />
     );
   }
 

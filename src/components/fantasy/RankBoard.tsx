@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProfileCard } from "@/lib/fantasy/profiles";
 
 type Props = {
@@ -22,6 +22,15 @@ type Drag = {
   /** Distance between two rows' tops, measured when the drag began. */
   step: number;
 };
+
+/**
+ * The row that was dropped, still offset from its new slot by however far the
+ * finger was from a clean row boundary. See `end` for why this exists.
+ */
+type Settle = { name: string; offset: number; running: boolean };
+
+const SETTLE_MS = 180;
+const SHIFT_MS = 160;
 
 function move<T>(list: T[], from: number, to: number): T[] {
   const next = [...list];
@@ -47,6 +56,25 @@ export default function RankBoard({
 }: Props) {
   const listRef = useRef<HTMLUListElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [settle, setSettle] = useState<Settle | null>(null);
+
+  /**
+   * Run the drop animation in two frames: paint once at the leftover offset
+   * with no transition, then transition to zero. Committing the order moves the
+   * row to a new layout slot instantly, and CSS can't animate a layout change —
+   * so without this the row teleports to the new slot and only then slides.
+   */
+  useEffect(() => {
+    if (!settle) return;
+    if (!settle.running) {
+      const frame = requestAnimationFrame(() =>
+        setSettle((s) => (s && !s.running ? { ...s, offset: 0, running: true } : s))
+      );
+      return () => cancelAnimationFrame(frame);
+    }
+    const timer = setTimeout(() => setSettle(null), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [settle]);
 
   const start = useCallback(
     (event: React.PointerEvent<HTMLLIElement>, index: number) => {
@@ -90,21 +118,43 @@ export default function RankBoard({
   const end = useCallback(
     (event: React.PointerEvent<HTMLLIElement>) => {
       if (!drag || drag.pointerId !== event.pointerId) return;
+      const { from, over, dy, step } = drag;
       setDrag(null);
+
+      // Where the finger left the row, relative to the slot it is about to
+      // occupy. Handing this to the settle animation is what turns the drop
+      // into a slide instead of a jump.
+      setSettle({ name: order[from], offset: dy - (over - from) * step, running: false });
+
       // Committed outside the state updater: updaters must stay pure, and one
       // that saved would fire the write twice under StrictMode.
-      if (drag.over !== drag.from) onReorder(move(order, drag.from, drag.over));
+      if (over !== from) onReorder(move(order, from, over));
     },
     [drag, order, onReorder]
   );
 
-  /** Where row `i` sits while a drag is in flight. */
-  function offsetFor(i: number): number {
-    if (!drag) return 0;
-    if (i === drag.from) return drag.dy;
-    if (drag.from < drag.over && i > drag.from && i <= drag.over) return -drag.step;
-    if (drag.from > drag.over && i < drag.from && i >= drag.over) return drag.step;
-    return 0;
+  /** Where row `i` sits, mid-drag or mid-drop. */
+  function offsetFor(i: number, name: string): number {
+    if (drag) {
+      if (i === drag.from) return drag.dy;
+      if (drag.from < drag.over && i > drag.from && i <= drag.over) return -drag.step;
+      if (drag.from > drag.over && i < drag.from && i >= drag.over) return drag.step;
+      return 0;
+    }
+    return settle?.name === name ? settle.offset : 0;
+  }
+
+  /**
+   * Only a row that is actually moving gets a transition. Displaced neighbours
+   * land on their new slot with the same transform they already had, so leaving
+   * a transition on them would animate a move that has already happened.
+   */
+  function transitionFor(name: string, held: boolean): string {
+    if (held) return "none";
+    if (settle?.name === name) {
+      return settle.running ? `transform ${SETTLE_MS}ms cubic-bezier(0.2, 0.8, 0.3, 1)` : "none";
+    }
+    return drag ? `transform ${SHIFT_MS}ms ease` : "none";
   }
 
   return (
@@ -114,7 +164,7 @@ export default function RankBoard({
         const held = drag?.from === i;
         // The rank badge shows where the row would land, so the numbers stay
         // truthful while the finger is still down.
-        const shown = drag ? (held ? drag.over : i + offsetFor(i) / drag.step) : i;
+        const shown = drag ? (held ? drag.over : i + offsetFor(i, name) / drag.step) : i;
 
         return (
           <li
@@ -124,12 +174,12 @@ export default function RankBoard({
             onPointerUp={end}
             onPointerCancel={end}
             style={{
-              transform: `translateY(${offsetFor(i)}px)`,
-              transition: held ? "none" : "transform 160ms ease",
-              zIndex: held ? 10 : undefined,
+              transform: `translateY(${offsetFor(i, name)}px)`,
+              transition: transitionFor(name, held),
+              zIndex: held || settle?.name === name ? 10 : undefined,
               touchAction: "none",
             }}
-            className={`relative flex min-h-0 flex-1 items-center gap-2 rounded-xl px-2
+            className={`relative flex min-h-0 flex-1 items-center gap-1.5 rounded-xl px-2
                         ${
                           held
                             ? "bg-[var(--panel-2)] shadow-lg shadow-black/40 ring-1 ring-[var(--accent)]"
@@ -163,23 +213,64 @@ export default function RankBoard({
               </span>
             </span>
 
+            <Outcome outcome={p?.lastResult?.outcome ?? null} />
+
+            <span className="w-9 shrink-0 text-right leading-tight">
+              <span className="block text-[11px] font-bold tabular-nums">
+                {Math.round(p?.pointsFor ?? 0)}
+              </span>
+              <span className="block text-[7px] uppercase tracking-wide text-[var(--muted)]">
+                pf
+              </span>
+            </span>
+
             <button
               type="button"
               aria-label={`${p?.realName ?? name} profile`}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => onOpenProfile(name)}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg
+              className="flex h-7 w-6 shrink-0 items-center justify-center rounded-lg
                          text-[11px] font-bold text-[var(--muted)] active:bg-[var(--panel-2)]"
             >
               i
             </button>
 
-            <span aria-hidden className="shrink-0 pr-0.5 text-[13px] leading-none text-[var(--line)]">
-              &#8942;&#8942;
-            </span>
+            {!disabled && (
+              <span
+                aria-hidden
+                className="shrink-0 pr-0.5 text-[13px] leading-none text-[var(--line)]"
+              >
+                &#8942;&#8942;
+              </span>
+            )}
           </li>
         );
       })}
     </ul>
+  );
+}
+
+/** Last completed week's result, as a single letter. */
+function Outcome({ outcome }: { outcome: "W" | "L" | "T" | null }) {
+  if (!outcome) {
+    return (
+      <span aria-hidden className="w-4 shrink-0 text-center text-[10px] text-[var(--line)]">
+        &ndash;
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-label={`last week: ${outcome}`}
+      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold ${
+        outcome === "W"
+          ? "bg-[var(--accent)] text-[var(--accent-ink)]"
+          : outcome === "L"
+            ? "bg-[var(--loss)] text-[#2a0509]"
+            : "bg-[var(--panel-2)] text-[var(--muted)]"
+      }`}
+    >
+      {outcome}
+    </span>
   );
 }

@@ -12,8 +12,7 @@ import type { WeekPhase } from "@/lib/fantasy/week";
 import ProfileSheet from "./ProfileSheet";
 import RankBoard from "./RankBoard";
 import ResultsBoard from "./ResultsBoard";
-
-export type Submission = { name: string; started: boolean; lockedIn: boolean };
+import type { Submission } from "./SubmissionList";
 
 type Props = {
   week: number;
@@ -69,7 +68,10 @@ export default function FantasyShell(props: Props) {
   const opensLabel = useMemo(() => formatET(new Date(opensAt)), [opensAt]);
 
   const editable = canVote && phase === "open" && week === currentWeek;
-  const submitted = submissions.filter((s) => s.started).length;
+  // Locking in freezes the board. Reordering again means unlocking first, so a
+  // "locked in" badge always means the ballot has stopped moving.
+  const draggable = editable && !lockedIn;
+  const lockedInCount = submissions.filter((s) => s.lockedIn).length;
 
   /**
    * Navigating between weeks re-renders this component rather than remounting
@@ -192,11 +194,16 @@ export default function FantasyShell(props: Props) {
               </>
             )}
           </span>
-          <span className="ml-auto flex items-center gap-1" title="Who has submitted">
+          <button
+            type="button"
+            onClick={() => setTab("results")}
+            aria-label="See who has voted"
+            className="ml-auto flex items-center gap-1 rounded-md px-1 py-0.5 active:bg-[var(--panel)]"
+          >
             {submissions.map((s) => (
               <span
                 key={s.name}
-                aria-label={`${s.name}: ${s.lockedIn ? "locked in" : s.started ? "in progress" : "not started"}`}
+                aria-hidden
                 className={`h-1.5 w-1.5 rounded-full ${
                   s.lockedIn
                     ? "bg-[var(--accent)]"
@@ -207,9 +214,9 @@ export default function FantasyShell(props: Props) {
               />
             ))}
             <span className="pl-1 text-[10px] font-semibold tabular-nums text-[var(--muted)]">
-              {submitted}/{submissions.length}
+              {lockedInCount}/{submissions.length}
             </span>
-          </span>
+          </button>
         </div>
       </header>
 
@@ -218,7 +225,7 @@ export default function FantasyShell(props: Props) {
           <RankBoard
             order={order}
             profiles={byName}
-            disabled={!editable}
+            disabled={!draggable}
             onReorder={reorder}
             onOpenProfile={showProfile}
           />
@@ -226,8 +233,8 @@ export default function FantasyShell(props: Props) {
           <ResultsBoard
             consensus={consensus}
             profiles={byName}
+            submissions={submissions}
             ballotCount={ballotCount}
-            memberCount={submissions.length}
             locksLabel={locksLabel}
             onOpenProfile={showProfile}
           />
@@ -245,7 +252,7 @@ export default function FantasyShell(props: Props) {
                   : "bg-[var(--accent)] text-[var(--accent-ink)]"
               }`}
             >
-              {lockedIn ? "Locked in ✓  (tap to unlock)" : "Lock in my rankings"}
+              {lockedIn ? "Locked in ✓  Tap to edit" : "Lock in my rankings"}
             </button>
             <p className="pt-1 text-center text-[9px] leading-tight text-[var(--muted)]">
               <SaveHint state={save} carriedFromWeek={carriedFromWeek} lockedIn={lockedIn} />
@@ -285,8 +292,8 @@ function SaveHint({
 }) {
   if (state === "saving") return <>Saving&hellip;</>;
   if (state === "error") return <span className="text-[var(--loss)]">Couldn&apos;t save</span>;
-  if (state === "saved") return <>Saved. You can keep editing until it locks.</>;
-  if (lockedIn) return <>You can still reorder &mdash; changes save automatically.</>;
+  if (lockedIn) return <>Your board is frozen. Unlock to make changes.</>;
+  if (state === "saved") return <>Saved. Keep editing until you lock in.</>;
   if (carriedFromWeek !== null) return <>Starting from your week {carriedFromWeek} order.</>;
   return <>Drag to reorder. Changes save automatically.</>;
 }
