@@ -4,7 +4,7 @@ import FantasyShell from "@/components/fantasy/FantasyShell";
 import { MEMBER_NAMES } from "@/lib/fantasy/config";
 import { consensusForWeek, getStartingOrder, getWeekBallots } from "@/lib/fantasy/ballots";
 import { buildConsensus } from "@/lib/fantasy/rankings";
-import { readSnapshot, snapshotIsStale } from "@/lib/fantasy/snapshot";
+import { readCards, snapshotIsStale } from "@/lib/fantasy/snapshot";
 import { buildWeeks, currentRankingWeek, phaseOf } from "@/lib/fantasy/week";
 import { ensureUsersSeeded } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/session";
@@ -22,8 +22,9 @@ export default async function FantasyPage({ searchParams }: Props) {
   // The season's week windows are derived from Sleeper's season start date, so
   // without a snapshot there is no week to render at all — hold the loading
   // screen until the first ingest lands.
-  const snapshot = await readSnapshot();
-  if (!snapshot) return <Bootstrapping />;
+  const league = await readCards();
+  if (!league) return <Bootstrapping />;
+  const snapshot = league.snapshot;
 
   const weeks = buildWeeks(snapshot.seasonStartDate);
   const current = currentRankingWeek(weeks);
@@ -57,15 +58,13 @@ export default async function FantasyPage({ searchParams }: Props) {
 
   return (
     <FantasyShell
-      user={user}
-      season={snapshot.season}
-      leagueName={snapshot.leagueName}
       week={week}
       currentWeek={current}
       phase={phase}
       opensAt={target.opensAt.toISOString()}
       locksAt={target.locksAt.toISOString()}
-      profiles={snapshot.profiles}
+      cards={league.cards}
+      rosterVersion={league.rosterVersion}
       myOrder={mine.order}
       myLockedIn={mine.lockedIn}
       carriedFromWeek={mine.carriedFromWeek}

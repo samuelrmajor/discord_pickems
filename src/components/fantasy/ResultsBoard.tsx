@@ -1,11 +1,11 @@
 "use client";
 
 import type { ConsensusRow } from "@/lib/fantasy/rankings";
-import type { Profile } from "@/lib/fantasy/snapshot";
+import type { ProfileCard } from "@/lib/fantasy/profiles";
 
 type Props = {
   consensus: ConsensusRow[] | null;
-  profiles: Map<string, Profile>;
+  profiles: Map<string, ProfileCard>;
   ballotCount: number;
   memberCount: number;
   locksLabel: string;

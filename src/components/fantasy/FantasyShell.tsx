@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { submitBallot } from "@/app/fantasy/actions";
 import type { ConsensusRow } from "@/lib/fantasy/rankings";
-import type { Profile } from "@/lib/fantasy/snapshot";
+import type { ProfileCard, ProfileRosters } from "@/lib/fantasy/profiles";
+import { loadRosters, peekRosters } from "@/lib/fantasy/roster-cache";
 import { formatET } from "@/lib/fantasy/time";
 import type { WeekPhase } from "@/lib/fantasy/week";
 import ProfileSheet from "./ProfileSheet";
@@ -15,15 +16,14 @@ import ResultsBoard from "./ResultsBoard";
 export type Submission = { name: string; started: boolean; lockedIn: boolean };
 
 type Props = {
-  user: string;
-  season: number;
-  leagueName: string;
   week: number;
   currentWeek: number;
   phase: WeekPhase;
   opensAt: string;
   locksAt: string;
-  profiles: Profile[];
+  cards: ProfileCard[];
+  /** Content hash of the rosters, which are fetched only when a sheet opens. */
+  rosterVersion: string;
   myOrder: string[];
   myLockedIn: boolean;
   carriedFromWeek: number | null;
@@ -42,8 +42,10 @@ export default function FantasyShell(props: Props) {
     week,
     currentWeek,
     phase,
+    opensAt,
     locksAt,
-    profiles,
+    cards,
+    rosterVersion,
     myOrder,
     myLockedIn,
     carriedFromWeek,
@@ -62,8 +64,9 @@ export default function FantasyShell(props: Props) {
   const [openProfile, setOpenProfile] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  const byName = useMemo(() => new Map(profiles.map((p) => [p.name as string, p])), [profiles]);
+  const byName = useMemo(() => new Map(cards.map((c) => [c.name as string, c])), [cards]);
   const locksLabel = useMemo(() => formatET(new Date(locksAt)), [locksAt]);
+  const opensLabel = useMemo(() => formatET(new Date(opensAt)), [opensAt]);
 
   const editable = canVote && phase === "open" && week === currentWeek;
   const submitted = submissions.filter((s) => s.started).length;
@@ -95,6 +98,26 @@ export default function FantasyShell(props: Props) {
       .then((res) => res.ok && router.refresh())
       .catch(() => {});
   }, [stale, router]);
+
+  /**
+   * Rosters are the bulk of the league payload and are only ever read inside a
+   * profile sheet, so they are fetched the first time one opens and then held
+   * in a client-side cache keyed by content version.
+   */
+  const [rosters, setRosters] = useState<Record<string, ProfileRosters> | null>(() =>
+    peekRosters(rosterVersion)
+  );
+  const [rostersFailed, setRostersFailed] = useState(false);
+
+  const showProfile = (name: string) => {
+    setOpenProfile(name);
+    if (rosters) return;
+    setRostersFailed(false);
+    loadRosters(rosterVersion).then((loaded) => {
+      if (loaded) setRosters(loaded);
+      else setRostersFailed(true);
+    });
+  };
 
   const persist = (next: string[], nextLocked: boolean) => {
     setSave("saving");
@@ -162,7 +185,7 @@ export default function FantasyShell(props: Props) {
             {phase === "locked" ? (
               <>Locked {locksLabel}</>
             ) : phase === "upcoming" ? (
-              <>Opens soon</>
+              <>Opens {opensLabel}</>
             ) : (
               <>
                 Locks <span className="font-semibold text-[var(--warn)]">{locksLabel}</span>
@@ -197,7 +220,7 @@ export default function FantasyShell(props: Props) {
             profiles={byName}
             disabled={!editable}
             onReorder={reorder}
-            onOpenProfile={setOpenProfile}
+            onOpenProfile={showProfile}
           />
         ) : (
           <ResultsBoard
@@ -206,7 +229,7 @@ export default function FantasyShell(props: Props) {
             ballotCount={ballotCount}
             memberCount={submissions.length}
             locksLabel={locksLabel}
-            onOpenProfile={setOpenProfile}
+            onOpenProfile={showProfile}
           />
         )}
       </main>
@@ -243,6 +266,8 @@ export default function FantasyShell(props: Props) {
 
       <ProfileSheet
         profile={openProfile ? (byName.get(openProfile) ?? null) : null}
+        rosters={openProfile ? (rosters?.[openProfile] ?? null) : null}
+        rostersFailed={rostersFailed}
         onClose={() => setOpenProfile(null)}
       />
     </div>

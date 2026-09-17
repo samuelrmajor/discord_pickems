@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Profile, RosterLine } from "@/lib/fantasy/snapshot";
+import type { ProfileCard, ProfileRosters, RosterLine } from "@/lib/fantasy/profiles";
 
-type Props = { profile: Profile | null; onClose: () => void };
+type Props = {
+  profile: ProfileCard | null;
+  /** Null while the lazy roster fetch is still in flight. */
+  rosters: ProfileRosters | null;
+  rostersFailed: boolean;
+  onClose: () => void;
+};
 
 const POSITION_TINT: Record<string, string> = {
   QB: "text-[#ff7b9c]",
@@ -19,7 +25,7 @@ function pts(n: number): string {
 }
 
 /** Bottom sheet with one manager's fantasy profile. */
-export default function ProfileSheet({ profile, onClose }: Props) {
+export default function ProfileSheet({ profile, rosters, rostersFailed, onClose }: Props) {
   // Escape is free to support and costs nothing on touch.
   useEffect(() => {
     if (!profile) return;
@@ -116,8 +122,14 @@ export default function ProfileSheet({ profile, onClose }: Props) {
           </div>
         )}
 
-        <Roster title="Starters" lines={profile.starters} showPoints />
-        <Roster title="Bench" lines={profile.bench} />
+        {rosters ? (
+          <>
+            <Roster title="Starters" lines={rosters.starters} showPoints />
+            <Roster title="Bench" lines={rosters.bench} />
+          </>
+        ) : (
+          <RosterPlaceholder failed={rostersFailed} />
+        )}
       </div>
     </div>
   );
@@ -176,6 +188,30 @@ function Roster({
                 {line.points === null ? "—" : pts(line.points)}
               </span>
             )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Stand-in for the roster lists while they load, sized so the sheet doesn't jump. */
+function RosterPlaceholder({ failed }: { failed: boolean }) {
+  if (failed) {
+    return (
+      <p className="mt-4 px-4 text-center text-[11px] text-[var(--muted)]">
+        Couldn&apos;t load the roster.
+      </p>
+    );
+  }
+  return (
+    <section className="mt-3 px-4" aria-busy="true">
+      <div className="h-3 w-14 rounded bg-[var(--panel)]" />
+      <ul className="mt-1 overflow-hidden rounded-xl bg-[var(--panel)]">
+        {Array.from({ length: 9 }, (_, i) => (
+          <li key={i} className="flex items-center gap-2 border-b border-[var(--line)] px-2.5 py-1.5 last:border-0">
+            <span className="h-2.5 w-7 rounded bg-[var(--panel-2)]" />
+            <span className="h-2.5 flex-1 rounded bg-[var(--panel-2)]" />
           </li>
         ))}
       </ul>

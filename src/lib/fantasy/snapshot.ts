@@ -2,7 +2,15 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { fantasyCache } from "@/db/schema";
 import { LEAGUE_ID } from "./config";
-import { buildProfiles, type LeagueSnapshot } from "./profiles";
+import {
+  buildProfiles,
+  rosterVersion,
+  toCard,
+  toRosters,
+  type LeagueSnapshot,
+  type ProfileCard,
+  type ProfileRosters,
+} from "./profiles";
 import {
   fetchLeague,
   fetchMatchups,
@@ -12,7 +20,14 @@ import {
   fetchUsers,
 } from "./sleeper";
 
-export type { LastResult, LeagueSnapshot, Profile, RosterLine } from "./profiles";
+export type {
+  LastResult,
+  LeagueSnapshot,
+  Profile,
+  ProfileCard,
+  ProfileRosters,
+  RosterLine,
+} from "./profiles";
 
 /**
  * How long each upstream resource stays good. The player dump barely moves and
@@ -110,18 +125,49 @@ export async function refreshSnapshot(): Promise<LeagueSnapshot> {
         )
       : [];
 
+  const profiles = buildProfiles(users, rosters, players, matchups, lastScoredWeek);
   const snapshot: LeagueSnapshot = {
     leagueName: league.name,
     season: state.season,
     nflWeek: state.week,
     seasonStartDate: state.seasonStartDate,
     lastScoredWeek,
-    profiles: buildProfiles(users, rosters, players, matchups, lastScoredWeek),
+    profiles,
+    rosterVersion: rosterVersion(profiles),
     builtAt: new Date().toISOString(),
   };
 
   await writeCache(SNAPSHOT_KEY, snapshot);
   return snapshot;
+}
+
+/**
+ * The rosters alone, for the lazy fetch. Returns null when the caller's version
+ * no longer matches what we hold, so a client asking for a superseded version
+ * is told to take the current one rather than being handed stale rosters.
+ */
+export async function readRosters(): Promise<{
+  version: string;
+  rosters: Record<string, ProfileRosters>;
+} | null> {
+  const snapshot = await readSnapshot();
+  if (!snapshot) return null;
+  return { version: snapshot.rosterVersion, rosters: toRosters(snapshot.profiles) };
+}
+
+/** The ranking board's view of the league: profiles minus their rosters. */
+export async function readCards(): Promise<{
+  cards: ProfileCard[];
+  rosterVersion: string;
+  snapshot: LeagueSnapshot;
+} | null> {
+  const snapshot = await readSnapshot();
+  if (!snapshot) return null;
+  return {
+    cards: snapshot.profiles.map(toCard),
+    rosterVersion: snapshot.rosterVersion,
+    snapshot,
+  };
 }
 
 /** Drop cached upstream payloads so the next refresh refetches from Sleeper. */

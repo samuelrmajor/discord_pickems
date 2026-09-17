@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { Profile } from "@/lib/fantasy/snapshot";
+import type { ProfileCard } from "@/lib/fantasy/profiles";
 
 type Props = {
   order: string[];
-  profiles: Map<string, Profile>;
+  profiles: Map<string, ProfileCard>;
   disabled: boolean;
   onReorder: (order: string[]) => void;
   onOpenProfile: (name: string) => void;

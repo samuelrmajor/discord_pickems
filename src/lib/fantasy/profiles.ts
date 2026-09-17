@@ -57,6 +57,8 @@ export type LeagueSnapshot = {
   seasonStartDate: string;
   lastScoredWeek: number;
   profiles: Profile[];
+  /** Content hash of the rosters; see `rosterVersion`. */
+  rosterVersion: string;
   builtAt: string;
 };
 
@@ -172,4 +174,49 @@ export function buildProfiles(
       bench,
     };
   });
+}
+
+// ---------------------------------------------------------------- splitting
+
+/**
+ * A profile without its roster: everything the ranking board and the top of
+ * the profile sheet need, and nothing else.
+ *
+ * The rosters are ~28KB of a ~34KB snapshot and are only read when someone
+ * opens a sheet, so they are held back and fetched on demand instead of riding
+ * along on every page load.
+ */
+export type ProfileCard = Omit<Profile, "starters" | "bench">;
+
+export type ProfileRosters = Pick<Profile, "starters" | "bench">;
+
+export function toCard({ starters, bench, ...card }: Profile): ProfileCard {
+  void starters;
+  void bench;
+  return card;
+}
+
+export function toRosters(profiles: Profile[]): Record<string, ProfileRosters> {
+  return Object.fromEntries(
+    profiles.map((p) => [p.name, { starters: p.starters, bench: p.bench }])
+  );
+}
+
+/**
+ * A short content hash of the rosters, used to version the lazy fetch.
+ *
+ * The snapshot itself is rebuilt every few minutes (scores move), but rosters
+ * only change on a waiver or a lineup edit. Versioning on content rather than
+ * on `builtAt` means a client that already holds the rosters keeps them across
+ * refreshes instead of re-downloading the same 28KB.
+ */
+export function rosterVersion(profiles: Profile[]): string {
+  const json = JSON.stringify(profiles.map((p) => [p.name, p.starters, p.bench]));
+  // FNV-1a, 32-bit. Collisions only cost a stale roster until the next change.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < json.length; i++) {
+    hash ^= json.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36);
 }
