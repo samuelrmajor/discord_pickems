@@ -12,7 +12,7 @@ export default async function Home() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // Absent means enabled, so anything not switched off reads as on.
+  // Reminders are opt-in, so anything without a row reads as off.
   const prefs = await getPrefsForUser(user);
 
   return (
@@ -89,7 +89,7 @@ export default async function Home() {
               <NotificationSwitch
                 moduleKey={mod.key}
                 moduleName={mod.name}
-                enabled={prefs[mod.key] ?? true}
+                enabled={prefs[mod.key] ?? false}
               />
             </div>
           );

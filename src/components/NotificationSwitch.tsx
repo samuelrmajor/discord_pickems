@@ -6,7 +6,10 @@ import { toggleNotifications } from "@/app/notification-actions";
 type Props = { moduleKey: string; moduleName: string; enabled: boolean };
 
 /**
- * Per-module Discord notification toggle, shown beside each tile on the hub.
+ * Per-module Discord reminder toggle, shown beside each tile on the hub.
+ *
+ * Off by default: reminders are opt-in, so nobody is pinged by a module they
+ * never asked to hear from.
  *
  * Flips optimistically and reverts if the write fails — this is a preference,
  * not a transaction, and a switch that waits on a round trip before moving
@@ -30,7 +33,7 @@ export default function NotificationSwitch({ moduleKey, moduleName, enabled }: P
       type="button"
       role="switch"
       aria-checked={on}
-      aria-label={`${moduleName} notifications`}
+      aria-label={`${moduleName} reminders`}
       onClick={flip}
       className="flex shrink-0 flex-col items-center gap-1 rounded-xl px-1.5 py-1 active:bg-[var(--panel-2)]"
     >
@@ -46,8 +49,8 @@ export default function NotificationSwitch({ moduleKey, moduleName, enabled }: P
           }`}
         />
       </span>
-      <span className="text-[8px] uppercase tracking-wide text-[var(--muted)]">
-        {on ? "pings on" : "muted"}
+      <span className="whitespace-nowrap text-[8px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        {on ? "Reminders On" : "Reminders Off"}
       </span>
     </button>
   );

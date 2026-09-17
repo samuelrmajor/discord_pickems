@@ -5,9 +5,12 @@ import { notificationPrefs } from "@/db/schema";
 /**
  * Who wants to be pinged about what.
  *
- * Absence means enabled throughout: a row is only ever written when someone
- * turns a module *off*, so nobody has to opt in to hear about something they
- * already signed up for, and adding a module doesn't start it silent.
+ * Reminders are opt-in: absence means off, and a row is only written when
+ * someone turns a module *on*. Nobody gets their phone buzzed by a module they
+ * never asked to hear from, and a new module starts quiet for everyone.
+ *
+ * Being opted out only suppresses the ping — the Discord posts still name you,
+ * by Sleeper team name instead of a mention.
  */
 
 export async function getPrefsForUser(userName: string): Promise<Record<string, boolean>> {
@@ -18,7 +21,7 @@ export async function getPrefsForUser(userName: string): Promise<Record<string, 
   return Object.fromEntries(rows.map((r) => [r.moduleKey, r.enabled]));
 }
 
-/** The set of users who have *not* switched this module off. */
+/** The users who have explicitly switched this module's reminders on. */
 export async function notifiableUsers(
   moduleKey: string,
   candidates: readonly string[]
@@ -28,8 +31,8 @@ export async function notifiableUsers(
     .from(notificationPrefs)
     .where(eq(notificationPrefs.moduleKey, moduleKey));
 
-  const off = new Set(rows.filter((r) => !r.enabled).map((r) => r.userName));
-  return new Set(candidates.filter((name) => !off.has(name)));
+  const on = new Set(rows.filter((r) => r.enabled).map((r) => r.userName));
+  return new Set(candidates.filter((name) => on.has(name)));
 }
 
 export async function setNotificationPref(
@@ -37,8 +40,8 @@ export async function setNotificationPref(
   moduleKey: string,
   enabled: boolean
 ): Promise<void> {
-  if (enabled) {
-    // Back to the default, so drop the row rather than storing `true`.
+  if (!enabled) {
+    // Back to the default, so drop the row rather than storing `false`.
     await db
       .delete(notificationPrefs)
       .where(
@@ -52,9 +55,9 @@ export async function setNotificationPref(
 
   await db
     .insert(notificationPrefs)
-    .values({ userName, moduleKey, enabled: false, updatedAt: new Date() })
+    .values({ userName, moduleKey, enabled: true, updatedAt: new Date() })
     .onConflictDoUpdate({
       target: [notificationPrefs.userName, notificationPrefs.moduleKey],
-      set: { enabled: false, updatedAt: new Date() },
+      set: { enabled: true, updatedAt: new Date() },
     });
 }
