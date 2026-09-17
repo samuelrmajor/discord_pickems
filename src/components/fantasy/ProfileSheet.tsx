@@ -171,7 +171,7 @@ function Roster({
         {lines.map((line) => (
           <li
             key={line.id}
-            className="flex items-center gap-2 border-b border-[var(--line)] px-2.5 py-1.5 last:border-0"
+            className="flex items-center gap-1.5 border-b border-[var(--line)] px-2.5 py-1.5 last:border-0"
           >
             <span
               className={`w-8 shrink-0 text-[10px] font-bold ${
@@ -186,8 +186,15 @@ function Roster({
                 {line.injury}
               </span>
             )}
-            <span className="w-8 shrink-0 text-right text-[10px] text-[var(--muted)]">
+            <span className="w-7 shrink-0 text-right text-[10px] text-[var(--muted)]">
               {line.team ?? "FA"}
+            </span>
+            <span
+              className={`w-12 shrink-0 text-right text-[10px] tabular-nums ${
+                line.opponent === "BYE" ? "text-[var(--warn)]" : "text-[var(--muted)]"
+              }`}
+            >
+              {line.opponent ?? ""}
             </span>
             {showPoints && (
               <span className="w-10 shrink-0 text-right text-[12px] font-semibold tabular-nums">
@@ -215,9 +222,10 @@ function RosterPlaceholder({ failed }: { failed: boolean }) {
       <div className="h-3 w-14 rounded bg-[var(--panel)]" />
       <ul className="mt-1 overflow-hidden rounded-xl bg-[var(--panel)]">
         {Array.from({ length: 9 }, (_, i) => (
-          <li key={i} className="flex items-center gap-2 border-b border-[var(--line)] px-2.5 py-1.5 last:border-0">
+          <li key={i} className="flex items-center gap-1.5 border-b border-[var(--line)] px-2.5 py-1.5 last:border-0">
             <span className="h-2.5 w-7 rounded bg-[var(--panel-2)]" />
             <span className="h-2.5 flex-1 rounded bg-[var(--panel-2)]" />
+            <span className="h-2.5 w-10 rounded bg-[var(--panel-2)]" />
           </li>
         ))}
       </ul>

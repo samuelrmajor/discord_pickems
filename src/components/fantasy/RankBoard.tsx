@@ -213,8 +213,6 @@ export default function RankBoard({
               </span>
             </span>
 
-            <Outcome outcome={p?.lastResult?.outcome ?? null} />
-
             <span className="w-9 shrink-0 text-right leading-tight">
               <span className="block text-[11px] font-bold tabular-nums">
                 {Math.round(p?.pointsFor ?? 0)}
@@ -247,30 +245,5 @@ export default function RankBoard({
         );
       })}
     </ul>
-  );
-}
-
-/** Last completed week's result, as a single letter. */
-function Outcome({ outcome }: { outcome: "W" | "L" | "T" | null }) {
-  if (!outcome) {
-    return (
-      <span aria-hidden className="w-4 shrink-0 text-center text-[10px] text-[var(--line)]">
-        &ndash;
-      </span>
-    );
-  }
-  return (
-    <span
-      aria-label={`last week: ${outcome}`}
-      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold ${
-        outcome === "W"
-          ? "bg-[var(--accent)] text-[var(--accent-ink)]"
-          : outcome === "L"
-            ? "bg-[var(--loss)] text-[#2a0509]"
-            : "bg-[var(--panel-2)] text-[var(--muted)]"
-      }`}
-    >
-      {outcome}
-    </span>
   );
 }

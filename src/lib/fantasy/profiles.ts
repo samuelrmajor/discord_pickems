@@ -5,6 +5,7 @@
  */
 import type { UserName } from "../users";
 import { MEMBERS, memberBySleeperId } from "./config";
+import { matchupFor, type Schedule } from "./schedule";
 import type {
   SleeperMatchup,
   SleeperPlayer,
@@ -20,6 +21,8 @@ export type RosterLine = {
   injury: string | null;
   /** Points scored in the last scored week, when we have them. */
   points: number | null;
+  /** This week's matchup: "@SEA", "vs SEA", "BYE", or null for a free agent. */
+  opponent: string | null;
 };
 
 export type LastResult = {
@@ -68,16 +71,19 @@ function displayName(user: SleeperUser | undefined, fallback: string): string {
 function lineFor(
   id: string,
   players: Record<string, SleeperPlayer>,
+  schedule: Schedule,
   points: number | null
 ): RosterLine {
   const p = players[id];
+  const team = p?.team ?? null;
   return {
     id,
     name: p?.name ?? id,
     position: p?.position ?? "--",
-    team: p?.team ?? null,
+    team,
     injury: p?.injury ?? null,
     points,
+    opponent: matchupFor(team, schedule),
   };
 }
 
@@ -112,7 +118,8 @@ export function buildProfiles(
   rosters: SleeperRoster[],
   players: Record<string, SleeperPlayer>,
   matchups: SleeperMatchup[],
-  lastScoredWeek: number
+  lastScoredWeek: number,
+  schedule: Schedule
 ): Profile[] {
   const userById = new Map(users.map((u) => [u.userId, u]));
   const rosterByOwner = new Map(
@@ -144,11 +151,11 @@ export function buildProfiles(
 
     const starters = (roster?.starters ?? [])
       .filter((id) => id && id !== "0")
-      .map((id) => lineFor(id, players, weekPoints.get(id) ?? null));
+      .map((id) => lineFor(id, players, schedule, weekPoints.get(id) ?? null));
     const starterIds = new Set(roster?.starters ?? []);
     const bench = (roster?.players ?? [])
       .filter((id) => !starterIds.has(id))
-      .map((id) => lineFor(id, players, null))
+      .map((id) => lineFor(id, players, schedule, null))
       .sort((a, b) => a.position.localeCompare(b.position) || a.name.localeCompare(b.name));
 
     return {

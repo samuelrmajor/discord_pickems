@@ -1,6 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { fantasyCache } from "@/db/schema";
+import { fetchWeek } from "../espn";
 import { LEAGUE_ID } from "./config";
 import {
   buildProfiles,
@@ -19,6 +20,8 @@ import {
   fetchState,
   fetchUsers,
 } from "./sleeper";
+import { buildSchedule } from "./schedule";
+import { buildWeeks, currentRankingWeek } from "./week";
 
 export type {
   LastResult,
@@ -40,6 +43,7 @@ const TTL = {
   rosters: 5 * 60 * 1000,
   matchups: 5 * 60 * 1000,
   players: 7 * 24 * 60 * 60 * 1000,
+  schedule: 6 * 60 * 60 * 1000,
 } as const;
 
 /** The processed snapshot is rebuilt whenever any source under it refreshes. */
@@ -125,7 +129,23 @@ export async function refreshSnapshot(): Promise<LeagueSnapshot> {
         )
       : [];
 
-  const profiles = buildProfiles(users, rosters, players, matchups, lastScoredWeek);
+  /**
+   * Opponents are for the week people are ranking, which is the week whose
+   * games are still ahead of them — not Sleeper's `state.week`, which rolls
+   * over on its own timetable.
+   */
+  const rankingWeek = currentRankingWeek(buildWeeks(state.seasonStartDate));
+  const schedule = await cached(
+    `schedule:${state.season}:${rankingWeek}`,
+    TTL.schedule,
+    async () => buildSchedule(await fetchWeek(state.season, rankingWeek))
+  ).catch((err) => {
+    // A roster without matchups is still worth showing.
+    console.error("schedule fetch failed", err);
+    return {};
+  });
+
+  const profiles = buildProfiles(users, rosters, players, matchups, lastScoredWeek, schedule);
   const snapshot: LeagueSnapshot = {
     leagueName: league.name,
     season: state.season,

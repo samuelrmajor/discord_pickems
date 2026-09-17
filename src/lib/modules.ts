@@ -36,8 +36,6 @@ export const MODULES: ModuleDef[] = [
     href: "/fantasy",
     glyph: "☰",
     live: true,
-    // Still being built out — open it to the league by deleting this line.
-    restrictedTo: ["sam"],
   },
 ];
 
