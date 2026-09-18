@@ -53,7 +53,7 @@ check("every post lands on its Eastern wall-clock time, all season", () => {
     "nudge-tue": "Tue 7:00 PM",
     "nudge-wed": "Wed 7:00 PM",
     "nudge-thu": "Thu 5:00 PM",
-    results: "Thu 6:00 PM",
+    results: "Sat 3:00 PM",
   };
   for (const w of WEEKS) {
     for (const job of JOBS) {
@@ -79,13 +79,28 @@ check("a job is due at its time and stays due through the grace window", () => {
   assert.deepEqual(ids(new Date(at.getTime() + 3 * 60 * 60 * 1000)), []);
 });
 
-check("a late last call never nags people after voting has closed", () => {
+check("no nudge ever fires once voting has closed", () => {
   const w = WEEKS[2];
-  const thu = JOBS.find((j) => j.id === "nudge-thu")!;
-  // Its grace window would otherwise reach an hour past the lock.
-  const afterLock = new Date(w.locksAt.getTime() + 60 * 1000);
-  assert.ok(afterLock.getTime() < scheduledAt(thu, w).getTime() + 2 * 60 * 60 * 1000);
-  assert.ok(!dueJobs(w, afterLock).some((j) => j.id === "nudge-thu"));
+  const nudges = JOBS.filter((j) => j.id.startsWith("nudge")).map((j) => j.id);
+  assert.ok(nudges.length > 0);
+  for (const minutes of [1, 60, 24 * 60]) {
+    const after = new Date(w.locksAt.getTime() + minutes * 60 * 1000);
+    const due = dueJobs(w, after).map((j) => j.id);
+    assert.ok(
+      !due.some((id) => nudges.includes(id)),
+      `${minutes}min after the lock still had ${due.join(",")}`
+    );
+  }
+});
+
+check("every reminder falls inside the voting window", () => {
+  for (const w of WEEKS) {
+    for (const job of JOBS.filter((j) => j.requires === "open")) {
+      const at = scheduledAt(job, w).getTime();
+      assert.ok(at > w.opensAt.getTime(), `${job.id} fires before voting opens`);
+      assert.ok(at < w.locksAt.getTime(), `${job.id} fires after voting closes`);
+    }
+  }
 });
 
 check("results only become due once the week is locked", () => {
@@ -146,7 +161,7 @@ check("a member with no Discord id falls back to their team name", () => {
 
 check("the open announcement carries the deadline and the link", () => {
   const msg = votingOpenMessage(3, LOCKS, [person({ name: "sam" })]);
-  assert.ok(msg.content!.includes("Thu 6:00 PM"));
+  assert.ok(msg.content!.includes("Sat 3:00 PM"));
   assert.ok(msg.content!.includes("/fantasy"));
 });
 

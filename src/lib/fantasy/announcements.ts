@@ -35,7 +35,7 @@ export const JOBS: JobDef[] = [
   { id: "nudge-tue", dayOffset: 0, hour: 19, requires: "open" },
   { id: "nudge-wed", dayOffset: 1, hour: 19, requires: "open" },
   { id: "nudge-thu", dayOffset: 2, hour: 17, requires: "open" },
-  { id: "results", dayOffset: 2, hour: 18, requires: "locked" },
+  { id: "results", dayOffset: 4, hour: 15, requires: "locked" },
 ];
 
 /** The instant a job is scheduled for, in the given week. */

@@ -1,8 +1,10 @@
 import { addDays, backTo, civilFromISO, etToInstant, type Civil } from "./time";
 
-/** Voting opens Tuesday 1:00am ET and locks Thursday 6:00pm ET. */
+/** Voting opens Tuesday 1:00am ET and locks Saturday 3:00pm ET. */
 const OPEN_HOUR = 1;
-const LOCK_HOUR = 18;
+const LOCK_HOUR = 15;
+/** Days from the week's Tuesday to its deadline. */
+const LOCK_DAY_OFFSET = 4;
 const TUESDAY = 2;
 const LAST_WEEK = 18;
 
@@ -34,7 +36,7 @@ export function buildWeeks(seasonStartDate: string): RankingWeek[] {
       week,
       tuesday,
       opensAt: etToInstant(tuesday, OPEN_HOUR),
-      locksAt: etToInstant(addDays(tuesday, 2), LOCK_HOUR),
+      locksAt: etToInstant(addDays(tuesday, LOCK_DAY_OFFSET), LOCK_HOUR),
     });
   }
   return weeks;
