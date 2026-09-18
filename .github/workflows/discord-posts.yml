@@ -9,8 +9,9 @@
 #   Tue 10:00am  voting is open
 #   Tue  7:00pm  whoever hasn't locked in
 #   Wed  7:00pm  whoever hasn't locked in
-#   Thu  5:00pm  whoever hasn't locked in (last call)
-#   Thu  6:00pm  voting closed, results
+#   Thu  5:00pm  whoever hasn't locked in
+#   Fri  6:00pm  whoever hasn't locked in (last call)
+#   Sat  3:00pm  voting closed, results
 #
 # Each post is claimed atomically, so the repeated pokes can't duplicate one.
 #
@@ -34,6 +35,7 @@ on:
           - nudge-tue
           - nudge-wed
           - nudge-thu
+          - nudge-fri
           - results
       ping:
         description: "Actually ping people (off = names only)"

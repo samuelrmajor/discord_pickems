@@ -10,7 +10,13 @@
 import { addDays, etToInstant } from "./time";
 import { phaseOf, type RankingWeek } from "./week";
 
-export type JobId = "open" | "nudge-tue" | "nudge-wed" | "nudge-thu" | "results";
+export type JobId =
+  | "open"
+  | "nudge-tue"
+  | "nudge-wed"
+  | "nudge-thu"
+  | "nudge-fri"
+  | "results";
 
 export type JobDef = {
   id: JobId;
@@ -35,6 +41,7 @@ export const JOBS: JobDef[] = [
   { id: "nudge-tue", dayOffset: 0, hour: 19, requires: "open" },
   { id: "nudge-wed", dayOffset: 1, hour: 19, requires: "open" },
   { id: "nudge-thu", dayOffset: 2, hour: 17, requires: "open" },
+  { id: "nudge-fri", dayOffset: 3, hour: 18, requires: "open" },
   { id: "results", dayOffset: 4, hour: 15, requires: "locked" },
 ];
 

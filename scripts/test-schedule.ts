@@ -53,6 +53,7 @@ check("every post lands on its Eastern wall-clock time, all season", () => {
     "nudge-tue": "Tue 7:00 PM",
     "nudge-wed": "Wed 7:00 PM",
     "nudge-thu": "Thu 5:00 PM",
+    "nudge-fri": "Fri 6:00 PM",
     results: "Sat 3:00 PM",
   };
   for (const w of WEEKS) {
