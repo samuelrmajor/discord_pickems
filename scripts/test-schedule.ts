@@ -177,7 +177,7 @@ check("a test post is marked and stays silent by default", () => {
   assert.deepEqual(test.mentions, [], "a test must not ping anyone");
   assert.equal(test.everyone, false);
   // The body is still the real message, so the test shows what will be sent.
-  assert.ok(test.content!.includes("Week 3 power rankings are open"));
+  assert.ok(test.content!.includes("Week 3 of the Coach's Poll is open"));
   assert.ok(test.content!.includes("<@id-sam>"), "names still render, they just don't fire");
 });
 

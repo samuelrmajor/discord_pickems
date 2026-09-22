@@ -3,9 +3,9 @@ import { ICON_BACKGROUND } from "@/lib/app-icon";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Pick'em",
-    short_name: "Pick'em",
-    description: "Weekly NFL pick'em and the group consensus parlay",
+    name: "FWL Fantasy",
+    short_name: "FWL Fantasy",
+    description: "Weekly NFL pick'em, the group consensus parlay, and the Coach's Poll",
     start_url: "/",
     scope: "/",
     display: "standalone",
@@ -16,7 +16,7 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icon", sizes: "32x32", type: "image/png" },
       { src: "/apple-icon", sizes: "180x180", type: "image/png" },
       { src: "/icon1", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icon1", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icon2", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

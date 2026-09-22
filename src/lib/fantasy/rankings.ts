@@ -48,7 +48,7 @@ export type ConsensusRow = {
 /**
  * Fold ballots into a consensus. Ballots are averaged rather than tallied by
  * first-place votes so that a member everyone ranks 4th beats one who is split
- * between 1st and 12th — which is what a power ranking is meant to express.
+ * between 1st and 12th — which is what the Coach's Poll is meant to express.
  */
 export function buildConsensus(
   weekBallots: Ballot[],

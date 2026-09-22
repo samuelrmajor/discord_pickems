@@ -1,13 +1,25 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const SITE_NAME = "FWL Fantasy";
+const DESCRIPTION = "Weekly NFL pick'em, the group consensus parlay, and the Coach's Poll";
+
 export const metadata: Metadata = {
-  title: "Pick'em",
-  description: "Weekly NFL pick'em and the group consensus parlay",
-  applicationName: "Pick'em",
+  // Needed for the absolute URLs Discord and friends want in og: tags.
+  metadataBase: new URL(process.env.APP_URL ?? "https://discordpickems.vercel.app"),
+  title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
+  description: DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: DESCRIPTION,
+  },
+  // `title` here is the label iOS writes under the home screen icon.
   appleWebApp: {
     capable: true,
-    title: "Pick'em",
+    title: "FWL Fantasy",
     statusBarStyle: "black-translucent",
   },
 };

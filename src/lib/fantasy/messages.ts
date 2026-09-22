@@ -13,7 +13,7 @@ import { ADMIN_LABEL } from "./admin";
 
 const APP_URL = process.env.APP_URL ?? "https://discordpickems.vercel.app";
 
-const RANKINGS_URL = `${APP_URL}/fantasy`;
+const POLL_URL = `${APP_URL}/fantasy`;
 
 /**
  * One league member as far as a Discord post is concerned.
@@ -54,9 +54,9 @@ export function votingOpenMessage(week: number, everyone: Recipient[]): DiscordM
   const { line, ids } = addressTo(everyone);
   return {
     content: [
-      `**Week ${week} power rankings are open.**`,
+      `**Week ${week} of the Coach's Poll is open.**`,
       `Rank the league before ${ADMIN_LABEL} closes voting — your week ${week - 1} order is already loaded, so it's a few drags if nothing much changed.`,
-      RANKINGS_URL,
+      POLL_URL,
       "",
       line,
     ].join("\n"),
@@ -78,8 +78,8 @@ export function nudgeMessage(week: number, everyone: Recipient[]): DiscordMessag
   return {
     content: [
       line,
-      `You haven't locked in your **Week ${week}** rankings. Voting closes as soon as ${ADMIN_LABEL} calls it, so don't sit on it.`,
-      RANKINGS_URL,
+      `You haven't locked in your **Week ${week}** ballot. Voting closes as soon as ${ADMIN_LABEL} calls it, so don't sit on it.`,
+      POLL_URL,
     ].join("\n"),
     mentions: ids,
   };

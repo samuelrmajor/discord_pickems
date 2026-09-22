@@ -182,7 +182,7 @@ export default function FantasyShell(props: Props) {
               &lsaquo;
             </Link>
             <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Power Rankings
+              Coach&apos;s Poll
             </span>
           </div>
 
@@ -278,7 +278,7 @@ export default function FantasyShell(props: Props) {
                   : "bg-[var(--accent)] text-[var(--accent-ink)]"
               }`}
             >
-              {lockedIn ? "Locked in ✓  Tap to edit" : "Lock in my rankings"}
+              {lockedIn ? "Locked in ✓  Tap to edit" : "Lock in my ballot"}
             </button>
             <p className="pt-1 text-center text-[9px] leading-tight text-[var(--muted)]">
               <SaveHint state={save} carriedFromWeek={carriedFromWeek} lockedIn={lockedIn} />

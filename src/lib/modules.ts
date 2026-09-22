@@ -31,10 +31,10 @@ export const MODULES: ModuleDef[] = [
   },
   {
     key: "fantasy",
-    name: "Power Rankings",
+    name: "Coach's Poll",
     tagline: "Rank the fantasy league each week; results open when Pat closes voting",
     href: "/fantasy",
-    glyph: "☰",
+    glyph: "C",
     live: true,
   },
 ];
@@ -48,4 +48,14 @@ export function canSeeModule(user: string, key: string): boolean {
 /** The tiles this user should be shown on the hub. */
 export function modulesFor(user: string): ModuleDef[] {
   return MODULES.filter((m) => !m.restrictedTo || m.restrictedTo.includes(user));
+}
+
+/**
+ * The module a path belongs to, or null.
+ *
+ * Used to validate the `next` hop through the login page: only a known module
+ * href gets carried across, so the parameter can never become an open redirect.
+ */
+export function moduleByHref(href: string | undefined): ModuleDef | null {
+  return MODULES.find((m) => m.href === href) ?? null;
 }

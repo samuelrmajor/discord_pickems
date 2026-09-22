@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Bootstrapping from "@/components/fantasy/Bootstrapping";
 import FantasyShell from "@/components/fantasy/FantasyShell";
@@ -14,11 +15,32 @@ import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
+const SITE_NAME = "FWL Fantasy";
+const TITLE = "Coach's Poll";
+const DESCRIPTION = "Rank the fantasy league each week; results open when Pat closes voting.";
+
+export const metadata: Metadata = {
+  title: TITLE,
+  description: DESCRIPTION,
+  // A page-level `openGraph` replaces the layout's outright rather than
+  // merging into it, so the shared fields are restated here.
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: TITLE,
+    description: DESCRIPTION,
+    url: "/fantasy",
+  },
+};
+
 type Props = { searchParams: Promise<{ week?: string }> };
 
 export default async function FantasyPage({ searchParams }: Props) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // Carry the destination so a tap on the Discord link lands here after signing
+  // in — and so the unfurl crawler, which is always signed out, is redirected
+  // to a login page that still describes this module.
+  if (!user) redirect("/login?next=/fantasy");
   if (!canSeeModule(user, "fantasy")) redirect("/");
 
   await ensureUsersSeeded();
