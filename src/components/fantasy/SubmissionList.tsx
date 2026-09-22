@@ -1,5 +1,6 @@
 "use client";
 
+import { ADMIN_LABEL } from "@/lib/fantasy/admin";
 import type { ProfileCard } from "@/lib/fantasy/profiles";
 
 export type Submission = { name: string; started: boolean; lockedIn: boolean };
@@ -7,7 +8,8 @@ export type Submission = { name: string; started: boolean; lockedIn: boolean };
 type Props = {
   submissions: Submission[];
   profiles: Map<string, ProfileCard>;
-  locksLabel: string;
+  /** When Pat closed the week, or null while it is still open. */
+  lockedLabel: string | null;
   locked: boolean;
 };
 
@@ -24,7 +26,7 @@ type Group = { key: string; label: string; tint: string; rows: Submission[] };
 export default function SubmissionList({
   submissions,
   profiles,
-  locksLabel,
+  lockedLabel,
   locked,
 }: Props) {
   const groups: Group[] = [
@@ -58,12 +60,12 @@ export default function SubmissionList({
         </p>
         <p className="mt-0.5 text-[11px] leading-snug text-[var(--muted)]">
           {locked ? (
-            <>Voting closed {locksLabel}.</>
+            <>Voting closed {lockedLabel}.</>
           ) : (
             <>
-              Everyone&apos;s picks open at{" "}
-              <span className="font-semibold text-[var(--warn)]">{locksLabel}</span>. You can see
-              who has voted, not what they picked.
+              Everyone&apos;s picks open when{" "}
+              <span className="font-semibold text-[var(--warn)]">{ADMIN_LABEL} closes the week</span>.
+              You can see who has voted, not what they picked.
             </>
           )}
         </p>

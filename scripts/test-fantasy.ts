@@ -30,10 +30,9 @@ console.log("\nweek windows");
 
 const WEEKS = buildWeeks("2026-09-09");
 
-check("every week opens Tuesday 1:00 AM and locks Saturday 3:00 PM ET", () => {
+check("every week opens Tuesday 1:00 AM ET", () => {
   for (const w of WEEKS) {
     assert.equal(ET(w.opensAt), "Tue 1:00 AM", `week ${w.week} open`);
-    assert.equal(ET(w.locksAt), "Sat 3:00 PM", `week ${w.week} lock`);
   }
 });
 
@@ -43,12 +42,19 @@ check("the wall clock survives the November DST change", () => {
   assert.equal(gap, 14 * 86_400_000 + 3_600_000);
 });
 
-check("phases follow the window", () => {
+check("a week opens on the clock but only closes when Pat closes it", () => {
   const w = WEEKS[2];
-  assert.equal(phaseOf(w, new Date(w.opensAt.getTime() - 1)), "upcoming");
-  assert.equal(phaseOf(w, w.opensAt), "open");
-  assert.equal(phaseOf(w, new Date(w.locksAt.getTime() - 1)), "open");
-  assert.equal(phaseOf(w, w.locksAt), "locked");
+  const later = new Date(w.opensAt.getTime() + 30 * 86_400_000);
+  assert.equal(phaseOf(w, false, new Date(w.opensAt.getTime() - 1)), "upcoming");
+  assert.equal(phaseOf(w, false, w.opensAt), "open");
+  // A month on with no lock, voting is still open: nothing expires on its own.
+  assert.equal(phaseOf(w, false, later), "open");
+  assert.equal(phaseOf(w, true, w.opensAt), "locked");
+});
+
+check("a lock before the week opens doesn't bring it forward", () => {
+  const w = WEEKS[2];
+  assert.equal(phaseOf(w, true, new Date(w.opensAt.getTime() - 1)), "upcoming");
 });
 
 check("the current week is the last one to have opened", () => {

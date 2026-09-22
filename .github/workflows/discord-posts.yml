@@ -7,11 +7,12 @@
 # time, which posts are due:
 #
 #   Tue 10:00am  voting is open
-#   Tue  7:00pm  whoever hasn't locked in
-#   Wed  7:00pm  whoever hasn't locked in
-#   Thu  5:00pm  whoever hasn't locked in
-#   Fri  6:00pm  whoever hasn't locked in (last call)
-#   Sat  3:00pm  voting closed, results
+#   Tue  2:00pm  whoever hasn't locked in
+#   Wed  2:00pm  whoever hasn't locked in
+#   Thu  2:00pm  whoever hasn't locked in
+#
+# There is no results post: Pat closes the week from the app and posts the
+# board by hand. Closing it also stops these reminders for the week.
 #
 # Each post is claimed atomically, so the repeated pokes can't duplicate one.
 #
@@ -35,8 +36,6 @@ on:
           - nudge-tue
           - nudge-wed
           - nudge-thu
-          - nudge-fri
-          - results
       ping:
         description: "Actually ping people (off = names only)"
         type: boolean

@@ -32,7 +32,7 @@ export const MODULES: ModuleDef[] = [
   {
     key: "fantasy",
     name: "Power Rankings",
-    tagline: "Rank the fantasy league each week; results open Thursday",
+    tagline: "Rank the fantasy league each week; results open when Pat closes voting",
     href: "/fantasy",
     glyph: "☰",
     live: true,

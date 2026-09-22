@@ -1,10 +1,7 @@
 import { addDays, backTo, civilFromISO, etToInstant, type Civil } from "./time";
 
-/** Voting opens Tuesday 1:00am ET and locks Saturday 3:00pm ET. */
+/** Voting opens Tuesday 1:00am ET. It closes when Pat says so — see `lock`. */
 const OPEN_HOUR = 1;
-const LOCK_HOUR = 15;
-/** Days from the week's Tuesday to its deadline. */
-const LOCK_DAY_OFFSET = 4;
 const TUESDAY = 2;
 const LAST_WEEK = 18;
 
@@ -14,8 +11,6 @@ export type RankingWeek = {
   tuesday: Civil;
   /** Ballots become editable. */
   opensAt: Date;
-  /** Ballots freeze and everyone's votes become visible. */
-  locksAt: Date;
 };
 
 /**
@@ -32,12 +27,7 @@ export function buildWeeks(seasonStartDate: string): RankingWeek[] {
   const weeks: RankingWeek[] = [];
   for (let week = 1; week <= LAST_WEEK; week++) {
     const tuesday = addDays(anchor, (week - 1) * 7);
-    weeks.push({
-      week,
-      tuesday,
-      opensAt: etToInstant(tuesday, OPEN_HOUR),
-      locksAt: etToInstant(addDays(tuesday, LOCK_DAY_OFFSET), LOCK_HOUR),
-    });
+    weeks.push({ week, tuesday, opensAt: etToInstant(tuesday, OPEN_HOUR) });
   }
   return weeks;
 }
@@ -53,9 +43,11 @@ export function currentRankingWeek(weeks: RankingWeek[], now = new Date()): numb
 
 export type WeekPhase = "upcoming" | "open" | "locked";
 
-export function phaseOf(w: RankingWeek, now = new Date()): WeekPhase {
-  const t = now.getTime();
-  if (t < w.opensAt.getTime()) return "upcoming";
-  if (t < w.locksAt.getTime()) return "open";
-  return "locked";
+/**
+ * Where a week stands. `locked` is whether a lock row exists for it, which the
+ * caller reads from the database — the clock alone can no longer answer this.
+ */
+export function phaseOf(w: RankingWeek, locked: boolean, now = new Date()): WeekPhase {
+  if (now.getTime() < w.opensAt.getTime()) return "upcoming";
+  return locked ? "locked" : "open";
 }

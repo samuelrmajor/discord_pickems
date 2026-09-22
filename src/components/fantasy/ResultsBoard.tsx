@@ -9,7 +9,8 @@ type Props = {
   profiles: Map<string, ProfileCard>;
   submissions: Submission[];
   ballotCount: number;
-  locksLabel: string;
+  /** When Pat closed the week, or null while it is still open. */
+  lockedLabel: string | null;
   onOpenProfile: (name: string) => void;
 };
 
@@ -18,7 +19,7 @@ export default function ResultsBoard({
   profiles,
   submissions,
   ballotCount,
-  locksLabel,
+  lockedLabel,
   onOpenProfile,
 }: Props) {
   // Before the lock this tab is the roll call: who has voted, never what they
@@ -28,7 +29,7 @@ export default function ResultsBoard({
       <SubmissionList
         submissions={submissions}
         profiles={profiles}
-        locksLabel={locksLabel}
+        lockedLabel={lockedLabel}
         locked={false}
       />
     );

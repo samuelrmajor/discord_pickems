@@ -5,19 +5,23 @@ import { fantasyCache } from "@/db/schema";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 import { DiscordNotConfigured, postToDiscord, type DiscordMessage } from "@/lib/discord";
 import { dueJobs, JOBS, type JobDef } from "@/lib/fantasy/announcements";
-import { consensusForWeek, getWeekBallots } from "@/lib/fantasy/ballots";
+import { getWeekBallots } from "@/lib/fantasy/ballots";
 import { MEMBERS } from "@/lib/fantasy/config";
+import { getLock } from "@/lib/fantasy/lock";
 import {
   asTestPost,
   nudgeMessage,
-  resultsMessage,
   votingOpenMessage,
   type Recipient,
 } from "@/lib/fantasy/messages";
-import { buildConsensus } from "@/lib/fantasy/rankings";
 import { readSnapshot } from "@/lib/fantasy/snapshot";
 import { notifiableUsers } from "@/lib/notifications";
-import { buildWeeks, currentRankingWeek, type RankingWeek } from "@/lib/fantasy/week";
+import {
+  buildWeeks,
+  currentRankingWeek,
+  phaseOf,
+  type RankingWeek,
+} from "@/lib/fantasy/week";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +50,8 @@ async function release(key: string): Promise<void> {
  *
  * The schedule lives in Eastern time (see `announcements`), not in the cron
  * expression, so a single half-hourly trigger covers every post and daylight
- * saving can't shift any of them.
+ * saving can't shift any of them. Everything sent from here is a prompt to
+ * vote; the results board is Pat's to post by hand.
  */
 export async function GET(request: Request) {
   if (!isAuthorizedCron(request)) {
@@ -58,6 +63,9 @@ export async function GET(request: Request) {
 
   const weeks = buildWeeks(snapshot.seasonStartDate);
   const week = weeks[currentRankingWeek(weeks) - 1];
+  // Whether voting is still open is Pat's call, not the clock's, so the phase
+  // has to be read from the database before anything can be judged due.
+  const phase = phaseOf(week, (await getLock(snapshot.season, week.week)) !== null);
 
   const params = new URL(request.url).searchParams;
   const forced = params.get("job");
@@ -68,9 +76,9 @@ export async function GET(request: Request) {
     });
   }
 
-  const due = dueJobs(week);
+  const due = dueJobs(week, phase);
   if (due.length === 0) {
-    return NextResponse.json({ week: week.week, due: [], sent: [] });
+    return NextResponse.json({ week: week.week, phase, due: [], sent: [] });
   }
 
   const sent: string[] = [];
@@ -83,7 +91,7 @@ export async function GET(request: Request) {
       continue;
     }
     try {
-      const message = await buildMessage(job, snapshot, week.week, week.locksAt);
+      const message = await buildMessage(job, snapshot, week.week);
       if (!message) {
         // Nothing worth saying (e.g. everyone already locked in). Keep the
         // claim so we don't reconsider it every half hour for the rest of the
@@ -105,7 +113,13 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ week: week.week, due: due.map((j) => j.id), sent, skipped });
+  return NextResponse.json({
+    week: week.week,
+    phase,
+    due: due.map((j) => j.id),
+    sent,
+    skipped,
+  });
 }
 
 type Snapshot = NonNullable<Awaited<ReturnType<typeof readSnapshot>>>;
@@ -114,7 +128,7 @@ type Snapshot = NonNullable<Awaited<ReturnType<typeof readSnapshot>>>;
  * Send one post on demand, for testing the pipeline end to end.
  *
  * Deliberately claim-free: a test must not consume the week's real post, or
- * trying the results message on a Tuesday would leave Thursday silent. It also
+ * trying Wednesday's nudge on a Tuesday would leave Wednesday silent. It also
  * strips mentions unless `ping=1`, so a smoke test doesn't buzz eleven phones,
  * and marks the message as a test so nobody in the channel acts on it.
  */
@@ -132,7 +146,7 @@ async function forceOne(
     );
   }
 
-  const built = await buildMessage(job, snapshot, week.week, week.locksAt);
+  const built = await buildMessage(job, snapshot, week.week);
   if (!built) {
     return NextResponse.json({
       forced: job.id,
@@ -178,24 +192,10 @@ async function audience(snapshot: Snapshot, week: number): Promise<Recipient[]> 
 async function buildMessage(
   job: JobDef,
   snapshot: Snapshot,
-  week: number,
-  locksAt: Date
+  week: number
 ): Promise<DiscordMessage | null> {
   const everyone = await audience(snapshot, week);
-
-  if (job.id === "open") return votingOpenMessage(week, locksAt, everyone);
-  if (job.id !== "results") return nudgeMessage(week, locksAt, everyone);
-
-  const ballots = await getWeekBallots(snapshot.season, week);
-  if (ballots.length === 0) return null;
-
-  const previous = await consensusForWeek(snapshot.season, week - 1);
-  const cards = new Map(snapshot.profiles.map((p) => [p.name as string, p]));
-  return resultsMessage(
-    week,
-    buildConsensus(ballots, previous ?? undefined),
-    cards,
-    ballots.length,
-    everyone
-  );
+  return job.id === "open"
+    ? votingOpenMessage(week, everyone)
+    : nudgeMessage(week, everyone);
 }

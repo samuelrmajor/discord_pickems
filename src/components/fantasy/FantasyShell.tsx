@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { submitBallot } from "@/app/fantasy/actions";
+import { setWeekLock, submitBallot } from "@/app/fantasy/actions";
 import type { ConsensusRow } from "@/lib/fantasy/rankings";
 import type { ProfileCard, ProfileRosters } from "@/lib/fantasy/profiles";
 import { loadRosters, peekRosters } from "@/lib/fantasy/roster-cache";
+import { ADMIN_LABEL } from "@/lib/fantasy/admin";
 import { formatET } from "@/lib/fantasy/time";
 import type { WeekPhase } from "@/lib/fantasy/week";
 import ProfileSheet from "./ProfileSheet";
@@ -19,7 +20,8 @@ type Props = {
   currentWeek: number;
   phase: WeekPhase;
   opensAt: string;
-  locksAt: string;
+  /** When Pat closed the week, or null while it is still open. */
+  lockedAt: string | null;
   cards: ProfileCard[];
   /** Content hash of the rosters, which are fetched only when a sheet opens. */
   rosterVersion: string;
@@ -27,6 +29,8 @@ type Props = {
   myLockedIn: boolean;
   carriedFromWeek: number | null;
   canVote: boolean;
+  /** Pat, who closes the week. Everyone else just sees the state of it. */
+  isAdmin: boolean;
   submissions: Submission[];
   consensus: ConsensusRow[] | null;
   ballotCount: number;
@@ -42,13 +46,14 @@ export default function FantasyShell(props: Props) {
     currentWeek,
     phase,
     opensAt,
-    locksAt,
+    lockedAt,
     cards,
     rosterVersion,
     myOrder,
     myLockedIn,
     carriedFromWeek,
     canVote,
+    isAdmin,
     submissions,
     consensus,
     ballotCount,
@@ -61,10 +66,14 @@ export default function FantasyShell(props: Props) {
   const [lockedIn, setLockedIn] = useState(myLockedIn);
   const [save, setSave] = useState<SaveState>("idle");
   const [openProfile, setOpenProfile] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
   const [, startTransition] = useTransition();
 
   const byName = useMemo(() => new Map(cards.map((c) => [c.name as string, c])), [cards]);
-  const locksLabel = useMemo(() => formatET(new Date(locksAt)), [locksAt]);
+  const lockedLabel = useMemo(
+    () => (lockedAt ? formatET(new Date(lockedAt)) : null),
+    [lockedAt]
+  );
   const opensLabel = useMemo(() => formatET(new Date(opensAt)), [opensAt]);
 
   const editable = canVote && phase === "open" && week === currentWeek;
@@ -145,6 +154,20 @@ export default function FantasyShell(props: Props) {
     persist(order, next);
   };
 
+  /**
+   * Pat closing (or reopening) the week for everyone. No optimistic update:
+   * this flips what the whole page shows, so it waits for the server and lets
+   * the refresh repaint from the truth.
+   */
+  const toggleWeek = () => {
+    setClosing(true);
+    startTransition(async () => {
+      await setWeekLock(week, phase !== "locked");
+      setClosing(false);
+      router.refresh();
+    });
+  };
+
   return (
     <div className="mx-auto flex h-[calc(100dvh-env(safe-area-inset-top))] w-full max-w-lg flex-col overflow-hidden">
       <header className="shrink-0 border-b border-[var(--line)]">
@@ -185,12 +208,15 @@ export default function FantasyShell(props: Props) {
         <div className="flex items-center gap-2 px-3 pb-1.5">
           <span className="text-[10px] text-[var(--muted)]">
             {phase === "locked" ? (
-              <>Locked {locksLabel}</>
+              <>Closed {lockedLabel}</>
             ) : phase === "upcoming" ? (
               <>Opens {opensLabel}</>
             ) : (
               <>
-                Locks <span className="font-semibold text-[var(--warn)]">{locksLabel}</span>
+                Open until{" "}
+                <span className="font-semibold text-[var(--warn)]">
+                  {ADMIN_LABEL} closes it
+                </span>
               </>
             )}
           </span>
@@ -235,7 +261,7 @@ export default function FantasyShell(props: Props) {
             profiles={byName}
             submissions={submissions}
             ballotCount={ballotCount}
-            locksLabel={locksLabel}
+            lockedLabel={lockedLabel}
             onOpenProfile={showProfile}
           />
         )}
@@ -269,6 +295,16 @@ export default function FantasyShell(props: Props) {
                   : "Voting opens Tuesday at 1:00 AM ET."}
           </p>
         )}
+
+        {isAdmin && phase !== "upcoming" ? (
+          <AdminLock
+            week={week}
+            locked={phase === "locked"}
+            busy={closing}
+            waitingOn={submissions.length - lockedInCount}
+            onToggle={toggleWeek}
+          />
+        ) : null}
       </footer>
 
       <ProfileSheet
@@ -277,6 +313,55 @@ export default function FantasyShell(props: Props) {
         rostersFailed={rostersFailed}
         onClose={() => setOpenProfile(null)}
       />
+    </div>
+  );
+}
+
+/**
+ * Pat's control over the week.
+ *
+ * Closing is what reveals the board to the league and what stops the Tuesday
+ * to Thursday reminders, so the button says how many people it would be
+ * closing on rather than just "lock". Reopening stays one tap away, because
+ * the only realistic mistake is closing a week too early.
+ */
+function AdminLock({
+  week,
+  locked,
+  busy,
+  waitingOn,
+  onToggle,
+}: {
+  week: number;
+  locked: boolean;
+  busy: boolean;
+  waitingOn: number;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="pt-1.5">
+      <button
+        onClick={onToggle}
+        disabled={busy}
+        className={`h-9 w-full rounded-xl text-[13px] font-bold transition active:scale-[0.99] disabled:opacity-50 ${
+          locked
+            ? "bg-[var(--panel)] text-[var(--muted)]"
+            : "bg-[var(--warn)] text-[var(--accent-ink)]"
+        }`}
+      >
+        {busy
+          ? "Working…"
+          : locked
+            ? `Reopen week ${week} voting`
+            : `Close week ${week} voting`}
+      </button>
+      <p className="pt-1 text-center text-[9px] leading-tight text-[var(--muted)]">
+        {locked
+          ? "The board is public. Reopening hides it again."
+          : waitingOn > 0
+            ? `Still waiting on ${waitingOn}. Closing reveals the board to everyone.`
+            : "Everyone is locked in. Closing reveals the board to everyone."}
+      </p>
     </div>
   );
 }
