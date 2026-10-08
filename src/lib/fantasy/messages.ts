@@ -15,21 +15,39 @@ const APP_URL = process.env.APP_URL ?? "https://discordpickems.vercel.app";
 
 const POLL_URL = `${APP_URL}/fantasy`;
 
+/** Discord embed accent, matching the app's green. */
+const ACCENT = 0x3ddc84;
+
 /**
  * One league member as far as a Discord post is concerned.
  *
- * `notify` is their switch on the hub. Someone who has muted the module still
- * gets named — being muted means "don't ping me", not "leave me out" — they
- * just appear as their Sleeper team name rather than a mention.
+ * `notify` is their reminders switch on the hub. Someone with it off still gets
+ * named, and still appears in the checklist — off means "don't ping me", not
+ * "leave me out" — they just show as their Sleeper team name rather than as a
+ * mention.
  */
 export type Recipient = {
   name: string;
+  /** Human name, as the checklist writes it. */
+  realName: string;
   discordId: string | null;
   notify: boolean;
   /** Sleeper team name, used in place of a ping. */
   teamName: string;
+  /** Their Coach's Poll ballot, locked in or not. */
   lockedIn: boolean;
+  /**
+   * Their pick'em card for the live NFL week. Null when the slate couldn't be
+   * read, in which case the reminder chases the poll alone rather than telling
+   * twelve people they are behind on nothing.
+   */
+  picks: { made: number; total: number; done: boolean } | null;
 };
+
+/** Someone who still owes the league something this week. */
+export function outstanding(person: Recipient): boolean {
+  return !person.lockedIn || person.picks?.done === false;
+}
 
 type Reference = { text: string; id: string | null };
 
@@ -65,24 +83,65 @@ export function votingOpenMessage(week: number, everyone: Recipient[]): DiscordM
 }
 
 /**
- * A nudge aimed only at the people holding everyone else up.
+ * A nudge addressed to whoever is holding the league up, with everyone's week
+ * attached so it is obvious who that is.
  *
  * Returns null when nobody is outstanding: a reminder addressed to no one is
  * just noise in the channel.
  */
 export function nudgeMessage(week: number, everyone: Recipient[]): DiscordMessage | null {
-  const pending = everyone.filter((p) => !p.lockedIn);
+  const pending = everyone.filter(outstanding);
   if (pending.length === 0) return null;
 
   const { line, ids } = addressTo(pending);
+  const done = everyone.length - pending.length;
+
   return {
     content: [
       line,
-      `You haven't locked in your **Week ${week}** ballot. Voting closes as soon as ${ADMIN_LABEL} calls it, so don't sit on it.`,
-      POLL_URL,
+      `You've still got **Week ${week}** business outstanding. The poll closes as soon as ${ADMIN_LABEL} calls it, so don't sit on it.`,
+      APP_URL,
     ].join("\n"),
     mentions: ids,
+    embeds: [
+      {
+        title: `Week ${week} checklist`,
+        description: checklist(everyone),
+        url: APP_URL,
+        color: ACCENT,
+        footer: { text: `${done} of ${everyone.length} all done` },
+        timestamp: new Date().toISOString(),
+      },
+    ],
   };
+}
+
+/** How many of the week's games they have picked, or "?" if we couldn't tell. */
+function picksCell(person: Recipient): string {
+  if (!person.picks) return "    ?";
+  return `${person.picks.made}/${person.picks.total}`.padStart(5);
+}
+
+/**
+ * Everyone's week as a table: what each person has in, and what they still owe.
+ *
+ * It lives in the embed rather than the message body, which is what makes it
+ * safe to print names people chose themselves — embed mentions render but never
+ * notify, so a team called "@everyone" can't turn a reminder into a mass ping.
+ * Every ping this post fires comes from the addressed line in `content`.
+ */
+function checklist(everyone: Recipient[]): string {
+  const rows = everyone.map((person) =>
+    [
+      outstanding(person) ? "!" : " ",
+      person.realName.slice(0, 12).padEnd(12),
+      picksCell(person),
+      person.lockedIn ? " in" : " --",
+    ].join("  ")
+  );
+  // The header is spaced to the columns the rows build below: the name starts
+  // at 3, the picks count at 17 and the ballot at 24.
+  return ["```", "   Member        Picks  Poll", ...rows, "```"].join("\n");
 }
 
 /**

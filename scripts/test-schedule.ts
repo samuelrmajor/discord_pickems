@@ -34,13 +34,18 @@ const ET = (d: Date) =>
 
 function person(over: Partial<Recipient> & { name: string }): Recipient {
   return {
+    realName: over.name,
     discordId: `id-${over.name}`,
     notify: true,
     teamName: `${over.name} FC`,
     lockedIn: false,
+    picks: { made: 14, total: 14, done: true },
     ...over,
   };
 }
+
+/** Someone with everything in, so only the deliberate gaps show up in a test. */
+const settled = (name: string) => person({ name, lockedIn: true });
 
 console.log("\nwhen posts fire");
 
@@ -132,22 +137,49 @@ check("no post pings the whole server", () => {
   assert.equal(nudgeMessage(3, league)!.everyone, undefined);
 });
 
-check("the nudge addresses only those who haven't locked in", () => {
+check("the nudge addresses only the people who still owe something", () => {
   const league = [
-    person({ name: "sam", lockedIn: true }),
+    settled("sam"),
     person({ name: "gus" }),
     person({ name: "pat", notify: false }),
   ];
   const msg = nudgeMessage(3, league)!;
-  assert.ok(!msg.content!.includes("sam"), "someone locked in is left out entirely");
+  assert.ok(!msg.content!.includes("<@id-sam>"), "someone all done is not pinged");
   assert.ok(msg.content!.includes("<@id-gus>"));
   assert.ok(msg.content!.includes("pat FC"));
   assert.deepEqual(msg.mentions, ["id-gus"]);
 });
 
-check("no nudge is sent when everyone has locked in", () => {
-  const league = MEMBER_NAMES.map((name) => person({ name, lockedIn: true }));
+check("outstanding picks are chased even with the ballot in", () => {
+  const league = [
+    settled("sam"),
+    person({ name: "gus", lockedIn: true, picks: { made: 3, total: 14, done: false } }),
+  ];
+  const msg = nudgeMessage(3, league)!;
+  assert.deepEqual(msg.mentions, ["id-gus"]);
+  assert.ok(msg.embeds![0].description!.includes("3/14"));
+});
+
+check("a game slept through stops counting against them", () => {
+  // 13 of 14 picked and nothing left open: there is nothing left to nag about.
+  const league = [
+    person({ name: "gus", lockedIn: true, picks: { made: 13, total: 14, done: true } }),
+  ];
   assert.equal(nudgeMessage(3, league), null);
+});
+
+check("no nudge is sent when everyone is all done", () => {
+  assert.equal(nudgeMessage(3, MEMBER_NAMES.map(settled)), null);
+});
+
+check("an unreadable slate falls back to chasing the poll alone", () => {
+  const league = [
+    person({ name: "sam", lockedIn: true, picks: null }),
+    person({ name: "gus", lockedIn: false, picks: null }),
+  ];
+  const msg = nudgeMessage(3, league)!;
+  assert.deepEqual(msg.mentions, ["id-gus"], "only the missing ballot is chased");
+  assert.ok(msg.embeds![0].description!.includes("?"), "the picks column admits it");
 });
 
 check("a member with no Discord id falls back to their team name", () => {
@@ -156,13 +188,52 @@ check("a member with no Discord id falls back to their team name", () => {
   assert.deepEqual(msg.mentions, []);
 });
 
+check("the checklist names everyone and flags only who is behind", () => {
+  const league = [
+    settled("sam"),
+    person({ name: "gus", picks: { made: 0, total: 14, done: false } }),
+    person({ name: "pat", notify: false, lockedIn: true }),
+  ];
+  const table = nudgeMessage(3, league)!.embeds![0];
+
+  assert.ok(table.description!.startsWith("```"), "it renders as a monospace block");
+  for (const name of ["sam", "gus", "pat"]) {
+    assert.ok(table.description!.includes(name), `${name} is listed`);
+  }
+  assert.ok(table.description!.includes("14/14"), "sam's picks are in");
+  assert.ok(table.description!.includes("0/14"), "gus has none in");
+  assert.equal(table.footer!.text, "2 of 3 all done");
+
+  // One "!" per person behind, and the rows line up under the header.
+  const lines = table.description!.split("\n").slice(2, -1);
+  assert.equal(lines.filter((l) => l.startsWith("!")).length, 1);
+  assert.equal(new Set(lines.map((l) => l.length)).size, 1, lines.join("|"));
+});
+
+check("the checklist can't be turned into a mass ping", () => {
+  // Team names come from Sleeper, so one could say anything. It only ever
+  // reaches the embed, where a mention renders but notifies nobody.
+  const league = [person({ name: "gus", teamName: "@everyone", notify: false })];
+  const msg = nudgeMessage(3, league)!;
+  assert.equal(msg.everyone, undefined);
+  assert.deepEqual(msg.mentions, []);
+});
+
 check("no post promises a deadline the app no longer enforces", () => {
   const league = [person({ name: "sam" })];
   for (const msg of [votingOpenMessage(3, league), nudgeMessage(3, league)!]) {
     assert.ok(!/\d:\d\d\s?(AM|PM)/i.test(msg.content!), msg.content);
     assert.ok(msg.content!.includes("Pat"), "it says who closes voting instead");
-    assert.ok(msg.content!.includes("/fantasy"));
   }
+});
+
+check("each post links where it wants you to go", () => {
+  // The poll announcement is about the poll. A reminder covers both modules, so
+  // it points at the hub and lets the checklist say which one you are short on.
+  assert.ok(votingOpenMessage(3, [person({ name: "sam" })]).content!.includes("/fantasy"));
+  const nudge = nudgeMessage(3, [person({ name: "sam" })])!.content!;
+  assert.ok(nudge.includes("http"), nudge);
+  assert.ok(!nudge.includes("/fantasy"), nudge);
 });
 
 console.log("\nmanual test sends");

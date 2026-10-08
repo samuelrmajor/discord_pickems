@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-import { saveBulkPicks, type BulkMode } from "@/lib/queries";
+import { getUserWeekPicks, saveBulkPicks, type BulkMode } from "@/lib/queries";
 
 const MODES: BulkMode[] = ["home", "away", "favorite"];
 
@@ -21,5 +21,9 @@ export async function POST(request: Request) {
   }
 
   const result = await saveBulkPicks(user, season, week, mode, body?.overwrite === true);
-  return NextResponse.json({ ok: true, ...result });
+  // Hand back the stored card as well. Which games a bulk tap actually touches
+  // depends on kickoff times and on what was already saved, so a client that
+  // guessed would drift from the database on every edge case.
+  const saved = await getUserWeekPicks(user, season, week);
+  return NextResponse.json({ ok: true, ...result, saved });
 }

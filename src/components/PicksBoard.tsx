@@ -15,6 +15,12 @@ type Props = {
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
+/**
+ * How long after a save we still believe a refresh that disagrees with us is
+ * just stale. Past this, a pick the server doesn't have really is missing.
+ */
+const SETTLE_MS = 4000;
+
 export default function PicksBoard({ season, week, games, initialPicks }: Props) {
   const [picks, setPicks] = useState<Record<string, Side>>(initialPicks);
   const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
@@ -22,9 +28,14 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
   const [armedBulk, setArmedBulk] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+  /** Games the server was seen to be missing, so the warning can be specific. */
+  const [drifted, setDrifted] = useState<string[]>([]);
   const savedTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const router = useRouter();
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** When each pick made in this session was last written, by game id. */
+  const savedAt = useRef<Record<string, number>>({});
 
   /**
    * The Results and Parlay tabs are server-rendered and swapped in on the
@@ -38,6 +49,68 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
   }, [router]);
 
   useEffect(() => () => clearTimeout(refreshTimer.current), []);
+
+  /**
+   * Check the board against the server every time fresh props arrive.
+   *
+   * Saving is optimistic — the tap paints the button and the request goes out
+   * behind it — so a dropped request used to leave a pick looking made forever,
+   * which is exactly how somebody ends up with one pick stored and a full card
+   * on screen. Nothing is overwritten here: a pick the server is missing is
+   * reported rather than erased, because the selection on screen is the one the
+   * person meant and the "lock in" button can still land it.
+   *
+   * Only picks made in this session are checked, and only once they have had a
+   * moment to settle — a refresh already in flight when a pick was saved comes
+   * back without it, and that is staleness, not loss.
+   */
+  const onScreen = useRef(picks);
+  useEffect(() => {
+    onScreen.current = picks;
+  }, [picks]);
+
+  useEffect(() => {
+    const now = Date.now();
+    const written = savedAt.current;
+    const card = onScreen.current;
+    setDrifted(
+      Object.keys(written).filter(
+        (id) =>
+          now - written[id] > SETTLE_MS &&
+          card[id] !== undefined &&
+          initialPicks[id] !== card[id]
+      )
+    );
+    // Deliberately keyed on the server's picks alone: this must run when fresh
+    // truth arrives, not every time the card changes, or a pick saved seconds
+    // ago would be judged against a refresh that predates it.
+  }, [initialPicks]);
+
+  /**
+   * Keep the bottom of the list clear of the action bar.
+   *
+   * The bar is fixed, so it floats over the last game rather than pushing it up,
+   * and the page scrolls the document — there is no inner scroll container to
+   * pad. The clearance used to be a hardcoded value, which silently stopped
+   * matching the moment the bar grew a second row. Measuring it instead means
+   * the last row stays reachable whatever the bar ends up containing.
+   */
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [barHeight, setBarHeight] = useState(0);
+
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      const height = bar.getBoundingClientRect().height;
+      // Zero means this tab is hidden (`display: none` has no box), not that the
+      // bar shrank, so the last real measurement is kept for coming back to.
+      if (height > 0) setBarHeight(height);
+    });
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
 
   const isLocked = useCallback(
     (game: GameVM) => game.locked || lockedNow[game.id] === true,
@@ -94,6 +167,7 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
         }
 
         if (!res.ok) throw new Error(String(res.status));
+        savedAt.current[game.id] = Date.now();
         flash(game.id, "saved");
         scheduleRefresh();
       } catch {
@@ -130,23 +204,26 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
           });
           if (!res.ok) throw new Error(String(res.status));
 
-          const targets = overwrite ? openGames : blanks;
-          const applied: Record<string, Side> = {};
-          for (const game of targets) {
-            const side = mode === "favorite" ? game.favorite : mode;
-            if (side) applied[game.id] = side;
-          }
+          // The server says which games it actually wrote, and hands back the
+          // stored card — a game with no line yet, or one that kicked off a
+          // moment ago, is skipped, and guessing at that is how the board and
+          // the database used to drift apart.
+          const { applied, skipped, saved } = (await res.json()) as {
+            applied: number;
+            skipped: number;
+            saved: Record<string, Side>;
+          };
 
-          setPicks((prev) => ({ ...prev, ...applied }));
+          setPicks(saved);
+          savedAt.current = {};
+          setDrifted([]);
           setArmedBulk(null);
           scheduleRefresh();
 
-          const count = Object.keys(applied).length;
-          const missing = targets.length - count;
           setNotice(
-            missing > 0
-              ? `Set ${count} picks. ${missing} game${missing === 1 ? " has" : "s have"} no line posted yet.`
-              : `Set ${count} pick${count === 1 ? "" : "s"}.`
+            skipped > 0
+              ? `Set ${applied} pick${applied === 1 ? "" : "s"}. ${skipped} game${skipped === 1 ? " was" : "s were"} left alone.`
+              : `Set ${applied} pick${applied === 1 ? "" : "s"}.`
           );
         } catch {
           setNotice("Bulk pick failed. Try again.");
@@ -155,6 +232,55 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
     },
     [armedBulk, openGames, picks, scheduleRefresh, season, week]
   );
+
+  /**
+   * Send the whole card and adopt whatever the server says it stored.
+   *
+   * The one action on this screen that ends with the board and the database
+   * provably agreeing: every selection goes up, and the state comes back down
+   * from the stored rows rather than from what we hoped happened. It is the fix
+   * for a pick that quietly never landed, and it is safe to press at any time.
+   */
+  const lockIn = useCallback(() => {
+    setConfirming(true);
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/picks/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ season, week, picks }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+
+        const { saved, stored, rejected } = (await res.json()) as {
+          saved: Record<string, Side>;
+          stored: number;
+          rejected: string[];
+        };
+
+        setPicks(saved);
+        setDrifted([]);
+        savedAt.current = {};
+        for (const id of rejected) {
+          setLockedNow((prev) => ({ ...prev, [id]: true }));
+        }
+
+        const open = games.length - rejected.length;
+        setNotice(
+          stored >= games.length
+            ? `All ${stored} picks are locked in.`
+            : rejected.length > 0
+              ? `${stored} of ${games.length} locked in. ${rejected.length} game${rejected.length === 1 ? "" : "s"} had already kicked off.`
+              : `${stored} of ${open} locked in — the rest are still blank.`
+        );
+        router.refresh();
+      } catch {
+        setNotice("Couldn't reach the server. Your picks aren't confirmed — try again.");
+      } finally {
+        setConfirming(false);
+      }
+    });
+  }, [games.length, picks, router, season, week]);
 
   const groups = useMemo(() => groupByDay(games, (g) => new Date(g.kickoffAt)), [games]);
 
@@ -167,7 +293,18 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
   }
 
   return (
-    <div className="pb-14">
+    <div>
+      {drifted.length > 0 && (
+        <div className="mx-2 mt-2 rounded-lg border border-[var(--warn)] bg-[var(--panel-2)] px-2.5 py-1.5 text-[11px] leading-snug">
+          <span className="font-semibold text-[var(--warn)]">
+            {drifted.length} pick{drifted.length === 1 ? "" : "s"} didn&apos;t reach the server.
+          </span>{" "}
+          <span className="text-[var(--muted)]">
+            They&apos;re still on your card — tap Lock in picks to save them.
+          </span>
+        </div>
+      )}
+
       {notice && (
         <button
           onClick={() => setNotice(null)}
@@ -197,30 +334,50 @@ export default function PicksBoard({ season, week, games, initialPicks }: Props)
         </section>
       ))}
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[var(--panel)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-        <div className="mx-auto flex max-w-lg items-center gap-1.5 px-2 py-1.5">
-          <span className="w-9 shrink-0 text-center text-[11px] font-semibold tabular-nums text-[var(--muted)]">
-            {pickedCount}/{games.length}
-          </span>
-          <BulkButton
-            label="Home"
-            armed={armedBulk === "home"}
-            disabled={isPending || openGames.length === 0}
-            onClick={() => bulk("home")}
-          />
-          <BulkButton
-            label="Away"
-            armed={armedBulk === "away"}
-            disabled={isPending || openGames.length === 0}
-            onClick={() => bulk("away")}
-          />
-          <BulkButton
-            label="Faves"
-            armed={armedBulk === "favorite"}
-            disabled={isPending || openGames.length === 0 || !hasAnyLine}
-            title={hasAnyLine ? undefined : "No betting lines posted for this week yet"}
-            onClick={() => bulk("favorite")}
-          />
+      {/* Stands in for the fixed bar's footprint so the last game clears it. */}
+      <div aria-hidden style={{ height: barHeight || 92 }} />
+
+      <div
+        ref={barRef}
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--line)] bg-[var(--panel)]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      >
+        <div className="mx-auto max-w-lg px-2 py-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="w-9 shrink-0 text-center text-[11px] font-semibold tabular-nums text-[var(--muted)]">
+              {pickedCount}/{games.length}
+            </span>
+            <BulkButton
+              label="Home"
+              armed={armedBulk === "home"}
+              disabled={isPending || openGames.length === 0}
+              onClick={() => bulk("home")}
+            />
+            <BulkButton
+              label="Away"
+              armed={armedBulk === "away"}
+              disabled={isPending || openGames.length === 0}
+              onClick={() => bulk("away")}
+            />
+            <BulkButton
+              label="Faves"
+              armed={armedBulk === "favorite"}
+              disabled={isPending || openGames.length === 0 || !hasAnyLine}
+              title={hasAnyLine ? undefined : "No betting lines posted for this week yet"}
+              onClick={() => bulk("favorite")}
+            />
+          </div>
+          <button
+            onClick={lockIn}
+            disabled={confirming || pickedCount === 0}
+            className={`mt-1.5 h-9 w-full rounded-lg text-[12px] font-bold transition
+                        active:scale-[0.99] disabled:opacity-30 ${
+                          drifted.length > 0
+                            ? "bg-[var(--warn)] text-black"
+                            : "bg-[var(--accent)] text-[var(--accent-ink)]"
+                        }`}
+          >
+            {confirming ? "Checking with the server…" : "Lock in picks"}
+          </button>
         </div>
       </div>
     </div>

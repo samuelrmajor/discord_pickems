@@ -109,3 +109,71 @@ export async function saveBulkPicks(
 
   return { applied: rows.length, skipped };
 }
+
+/** One member's picks for a week, as the database actually holds them. */
+export async function getUserWeekPicks(
+  userName: string,
+  season: number,
+  week: number
+): Promise<Record<string, "home" | "away">> {
+  const weekGames = await getWeekGames(season, week);
+  const weekGameIds = new Set(weekGames.map((g) => g.id));
+  const rows = await db.select().from(picks).where(eq(picks.userName, userName));
+
+  const out: Record<string, "home" | "away"> = {};
+  for (const row of rows) {
+    if (weekGameIds.has(row.gameId)) out[row.gameId] = row.choice as "home" | "away";
+  }
+  return out;
+}
+
+/**
+ * Write a whole card at once and report back what the database then holds.
+ *
+ * This is the "lock in" path, and it exists because optimistic saving can lie.
+ * A tap that never reached the server still paints the button green, so the
+ * board could show a full card while the league saw one pick. Re-sending every
+ * selection makes that recoverable in one tap, and reading the rows back
+ * afterwards means the answer is the stored truth rather than another
+ * assumption about it.
+ */
+export async function confirmPicks(
+  userName: string,
+  season: number,
+  week: number,
+  desired: Record<string, "home" | "away">
+): Promise<{
+  saved: Record<string, "home" | "away">;
+  stored: number;
+  /** Selections that could not be written, because the game had kicked off. */
+  rejected: string[];
+}> {
+  const weekGames = await getWeekGames(season, week);
+  const now = Date.now();
+
+  const rows: { userName: string; gameId: string; choice: "home" | "away"; updatedAt: Date }[] = [];
+  const rejected: string[] = [];
+
+  for (const game of weekGames) {
+    const choice = desired[game.id];
+    if (!choice) continue;
+    if (game.kickoffAt.getTime() <= now) {
+      rejected.push(game.id);
+      continue;
+    }
+    rows.push({ userName, gameId: game.id, choice, updatedAt: new Date() });
+  }
+
+  if (rows.length > 0) {
+    await db
+      .insert(picks)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: [picks.userName, picks.gameId],
+        set: { choice: sql`excluded.choice`, updatedAt: new Date() },
+      });
+  }
+
+  const saved = await getUserWeekPicks(userName, season, week);
+  return { saved, stored: Object.keys(saved).length, rejected };
+}

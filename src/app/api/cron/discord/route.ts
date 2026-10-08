@@ -15,7 +15,11 @@ import {
   type Recipient,
 } from "@/lib/fantasy/messages";
 import { readSnapshot } from "@/lib/fantasy/snapshot";
-import { notifiableUsers } from "@/lib/notifications";
+import { fetchCalendar } from "@/lib/espn";
+import { getWeekGames, getWeekPicks } from "@/lib/queries";
+import { buildSubmissions } from "@/lib/scoring";
+import { ensureWeekFresh } from "@/lib/sync";
+import { remindersFor } from "@/lib/notifications";
 import {
   buildWeeks,
   currentRankingWeek,
@@ -165,16 +169,48 @@ async function forceOne(
 }
 
 /**
- * The league as the posts see it: who to ping, who to merely name, and who has
- * already locked in.
+ * Everyone's pick'em card for the live NFL week, by login name.
+ *
+ * Best effort by design: this reaches ESPN for the current week, and a reminder
+ * that can still chase the poll is worth more than one that fails because a
+ * third party is down. On failure the checklist prints "?" for the column.
+ */
+async function pickemProgress(): Promise<Map<string, PickemCard> | null> {
+  try {
+    const { season, currentWeek } = await fetchCalendar();
+    await ensureWeekFresh(season, currentWeek);
+    const games = await getWeekGames(season, currentWeek);
+    const picks = await getWeekPicks(games);
+    const rows = buildSubmissions(
+      MEMBERS.map((m) => m.name),
+      games,
+      picks
+    );
+    return new Map(
+      rows.map((row) => [
+        row.name,
+        // `done` means nothing left that can still be picked, so a game someone
+        // slept through doesn't nag them for the rest of the week.
+        { made: row.picked, total: row.total, done: row.done },
+      ])
+    );
+  } catch (err) {
+    console.error("pick'em progress unavailable for the reminder", err);
+    return null;
+  }
+}
+
+type PickemCard = { made: number; total: number; done: boolean };
+
+/**
+ * The league as the posts see it: who to ping, who to merely name, and what
+ * each of them still owes.
  */
 async function audience(snapshot: Snapshot, week: number): Promise<Recipient[]> {
-  const [ballots, notifiable] = await Promise.all([
+  const [ballots, notifiable, pickems] = await Promise.all([
     getWeekBallots(snapshot.season, week),
-    notifiableUsers(
-      "fantasy",
-      MEMBERS.map((m) => m.name)
-    ),
+    remindersFor(MEMBERS.map((m) => m.name)),
+    pickemProgress(),
   ]);
 
   const lockedIn = new Set(ballots.filter((b) => b.lockedIn).map((b) => b.voter));
@@ -182,10 +218,12 @@ async function audience(snapshot: Snapshot, week: number): Promise<Recipient[]> 
 
   return MEMBERS.map((member) => ({
     name: member.name,
+    realName: member.realName,
     discordId: member.discordUserId,
     notify: notifiable.has(member.name),
     teamName: teamNames.get(member.name) ?? member.realName,
     lockedIn: lockedIn.has(member.name),
+    picks: pickems?.get(member.name) ?? null,
   }));
 }
 
