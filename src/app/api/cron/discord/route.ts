@@ -20,6 +20,7 @@ import { getWeekGames, getWeekPicks } from "@/lib/queries";
 import { buildSubmissions } from "@/lib/scoring";
 import { ensureWeekFresh } from "@/lib/sync";
 import { remindersFor } from "@/lib/notifications";
+import { canSeeTd, tdProgress } from "@/lib/td/reminders";
 import {
   buildWeeks,
   currentRankingWeek,
@@ -207,10 +208,11 @@ type PickemCard = { made: number; total: number; done: boolean };
  * each of them still owes.
  */
 async function audience(snapshot: Snapshot, week: number): Promise<Recipient[]> {
-  const [ballots, notifiable, pickems] = await Promise.all([
+  const [ballots, notifiable, pickems, tds] = await Promise.all([
     getWeekBallots(snapshot.season, week),
     remindersFor(MEMBERS.map((m) => m.name)),
     pickemProgress(),
+    tdProgress(MEMBERS.map((m) => m.name)),
   ]);
 
   const lockedIn = new Set(ballots.filter((b) => b.lockedIn).map((b) => b.voter));
@@ -224,6 +226,8 @@ async function audience(snapshot: Snapshot, week: number): Promise<Recipient[]> 
     teamName: teamNames.get(member.name) ?? member.realName,
     lockedIn: lockedIn.has(member.name),
     picks: pickems?.get(member.name) ?? null,
+    // Left off entirely for anyone the module isn't open to yet.
+    ...(canSeeTd(member.name) ? { td: tds?.get(member.name) ?? null } : {}),
   }));
 }
 

@@ -69,7 +69,7 @@ forces a resync by hand.
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Local dev server |
-| `npm test` | Grading, standings and consensus checks (no database needed) |
+| `npm test` | Grading, standings, consensus and anytime-TD checks (no database needed) |
 | `npm run test:db` | End-to-end checks against the real database (writes and cleans up after itself) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
@@ -83,6 +83,7 @@ src/lib/espn.ts      ESPN client — schedule, odds, scores, week calendar
 src/lib/sync.ts      Upserts a week; keeps coin flips and lines from being clobbered
 src/lib/scoring.ts   Grading, standings, and the consensus parlay
 src/lib/queries.ts   All database reads and writes
-src/db/schema.ts     users / games / picks
+src/lib/td/          Anytime TD: ESPN rosters/lines/box scores, Odds API prices, grading
+src/db/schema.ts     users / games / picks / td_picks
 src/app/week/[week]  The one page, with Picks / Results / Parlay tabs
 ```

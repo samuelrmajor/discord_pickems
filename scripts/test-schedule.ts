@@ -236,6 +236,60 @@ check("each post links where it wants you to go", () => {
   assert.ok(!nudge.includes("/fantasy"), nudge);
 });
 
+console.log("\nanytime TD in the reminder");
+
+check("no TD column until the module is open to someone", () => {
+  const table = nudgeMessage(3, [person({ name: "gus" })])!.embeds![0].description!;
+  assert.ok(!table.includes(" TD"), table);
+});
+
+check("the checklist shows each player selection, shortened", () => {
+  const league = [
+    person({ name: "sam", lockedIn: true, td: { player: "Justin Jefferson", noLine: false, done: true } }),
+    person({ name: "gus" }),
+  ];
+  const table = nudgeMessage(3, league)!.embeds![0].description!;
+  assert.ok(table.includes("J.Jefferson"), table);
+  assert.ok(!table.includes("no DraftKings"), "no footnote when every leg has a line");
+
+  const lines = table.split("\n").slice(1, -1);
+  assert.equal(new Set(lines.slice(1).map((l) => l.length)).size, 1, lines.join("|"));
+  assert.equal(lines[0].indexOf("TD"), lines[1].indexOf("J.Jefferson"), "column lines up");
+});
+
+check("a missing TD pick is chased while games are still open", () => {
+  const league = [
+    person({ name: "sam", lockedIn: true, td: { player: null, noLine: false, done: false } }),
+    settled("gus"),
+  ];
+  const msg = nudgeMessage(3, league)!;
+  assert.deepEqual(msg.mentions, ["id-sam"]);
+  assert.ok(msg.embeds![0].description!.includes("--"));
+});
+
+check("once every game has kicked off, a missing TD pick stops nagging", () => {
+  const league = [
+    person({ name: "sam", lockedIn: true, td: { player: null, noLine: false, done: true } }),
+  ];
+  assert.equal(nudgeMessage(3, league), null);
+});
+
+check("a pick with no DraftKings line is starred and explained", () => {
+  const league = [
+    person({ name: "sam", td: { player: "Tyson Bagent", noLine: true, done: true } }),
+  ];
+  const table = nudgeMessage(3, league)!.embeds![0].description!;
+  assert.ok(table.includes("T.Bagent*"), table);
+  assert.ok(table.includes("no DraftKings anytime-TD line"), table);
+});
+
+check("an unreadable TD feed prints ? and chases nobody for it", () => {
+  const league = [person({ name: "sam", lockedIn: true, td: null })];
+  assert.equal(nudgeMessage(3, league), null);
+  const table = nudgeMessage(3, [person({ name: "sam", td: null })])!.embeds![0].description!;
+  assert.ok(/in\s+\?|--\s+\?/.test(table), table);
+});
+
 console.log("\nmanual test sends");
 
 check("a test post is marked and stays silent by default", () => {

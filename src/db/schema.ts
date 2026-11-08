@@ -8,6 +8,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -133,3 +134,40 @@ export const notificationPrefs = pgTable(
 );
 
 export type NotificationPrefRow = typeof notificationPrefs.$inferSelect;
+
+/**
+ * One member's anytime-touchdown leg for one week.
+ *
+ * The player's name, position and team are copied in at pick time rather than
+ * joined from a roster, because rosters live in a cache that turns over and a
+ * traded or released player must still read correctly on an old week.
+ *
+ * The unique index on (season, week, athlete) is the "no doubling up" rule: a
+ * book won't take the same leg twice in one parlay, so two members can't both
+ * hold the same player, and the database is what makes that true under a race.
+ */
+export const tdPicks = pgTable(
+  "td_picks",
+  {
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    userName: text("user_name")
+      .notNull()
+      .references(() => users.name, { onDelete: "cascade" }),
+    /** ESPN athlete id — the same id the prop feed and box score use. */
+    athleteId: text("athlete_id").notNull(),
+    athleteName: text("athlete_name").notNull(),
+    position: text("position").notNull(),
+    teamAbbr: text("team_abbr").notNull(),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id, { onDelete: "cascade" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.season, t.week, t.userName] }),
+    uniqueIndex("td_picks_season_week_athlete_idx").on(t.season, t.week, t.athleteId),
+  ]
+);
+
+export type TdPickRow = typeof tdPicks.$inferSelect;

@@ -9,6 +9,7 @@
  * to go and vote.
  */
 import type { DiscordMessage } from "../discord";
+import type { TdCell } from "../td/reminders";
 import { ADMIN_LABEL } from "./admin";
 
 const APP_URL = process.env.APP_URL ?? "https://discordpickems.vercel.app";
@@ -42,11 +43,17 @@ export type Recipient = {
    * twelve people they are behind on nothing.
    */
   picks: { made: number; total: number; done: boolean } | null;
+  /**
+   * Their anytime-TD leg. Absent when that module isn't open to them, so they
+   * are neither chased for it nor shown a column for it; null when it couldn't
+   * be read.
+   */
+  td?: TdCell | null;
 };
 
 /** Someone who still owes the league something this week. */
 export function outstanding(person: Recipient): boolean {
-  return !person.lockedIn || person.picks?.done === false;
+  return !person.lockedIn || person.picks?.done === false || person.td?.done === false;
 }
 
 type Reference = { text: string; id: string | null };
@@ -131,17 +138,42 @@ function picksCell(person: Recipient): string {
  * Every ping this post fires comes from the addressed line in `content`.
  */
 function checklist(everyone: Recipient[]): string {
+  // The TD column only appears once the module is open to someone, and stays
+  // blank for anyone it isn't open to yet.
+  const withTd = everyone.some((p) => p.td !== undefined);
   const rows = everyone.map((person) =>
     [
       outstanding(person) ? "!" : " ",
       person.realName.slice(0, 12).padEnd(12),
       picksCell(person),
       person.lockedIn ? " in" : " --",
+      ...(withTd ? [tdCell(person)] : []),
     ].join("  ")
   );
   // The header is spaced to the columns the rows build below: the name starts
-  // at 3, the picks count at 17 and the ballot at 24.
-  return ["```", "   Member        Picks  Poll", ...rows, "```"].join("\n");
+  // at 3, the picks count at 17, the ballot at 24 and the TD pick at 29.
+  const header = "   Member        Picks  Poll" + (withTd ? " TD" : "");
+  const table = ["```", header, ...rows, "```"];
+  if (everyone.some((p) => p.td?.noLine)) table.push("\\* no DraftKings anytime-TD line");
+  return table.join("\n");
+}
+
+/** Wide enough for "J.Jefferson*" while keeping the table under ~40 columns. */
+const TD_WIDTH = 11;
+
+/**
+ * Their anytime-TD player, shortened to "J.Jefferson", with a "*" when the
+ * book has no line for him — the leg can't be placed as it stands.
+ */
+function tdCell(person: Recipient): string {
+  const td = person.td;
+  if (td === undefined) return "".padEnd(TD_WIDTH);
+  if (td === null) return "?".padEnd(TD_WIDTH);
+  if (!td.player) return "--".padEnd(TD_WIDTH);
+  const [first, ...rest] = td.player.split(" ");
+  const short = rest.length ? `${first.charAt(0)}.${rest.join(" ")}` : first;
+  const mark = td.noLine ? "*" : "";
+  return (short.slice(0, TD_WIDTH - mark.length) + mark).padEnd(TD_WIDTH);
 }
 
 /**

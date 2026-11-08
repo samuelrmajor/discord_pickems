@@ -37,6 +37,16 @@ export const MODULES: ModuleDef[] = [
     glyph: "C",
     live: true,
   },
+  {
+    key: "touchdowns",
+    name: "Anytime TD",
+    tagline: "Everyone picks a touchdown scorer; twelve legs, a dollar each",
+    href: "/touchdowns",
+    glyph: "T",
+    live: true,
+    // Still being tried out; open it to the league once it has run a week.
+    restrictedTo: ["sam"],
+  },
 ];
 
 export function canSeeModule(user: string, key: string): boolean {
