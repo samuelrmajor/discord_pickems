@@ -61,6 +61,10 @@ export type TdGameVM = {
   kickoffAt: string;
   homeAbbr: string;
   awayAbbr: string;
+  homeLogo: string | null;
+  awayLogo: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
   status: "scheduled" | "in_progress" | "final";
   statusDetail: string;
   locked: boolean;
@@ -97,6 +101,8 @@ export type TdLegVM = {
   line: boolean | null;
   price: number | null;
   result: LegResult;
+  /** Touchdowns he has so far. Zero until he scores. */
+  tds: number;
 };
 
 export type TdWeek = {
@@ -267,6 +273,10 @@ export async function loadTdWeek(
     kickoffAt: g.kickoffAt.toISOString(),
     homeAbbr: g.homeAbbr,
     awayAbbr: g.awayAbbr,
+    homeLogo: g.homeLogo,
+    awayLogo: g.awayLogo,
+    homeScore: g.homeScore,
+    awayScore: g.awayScore,
     status: g.status as TdGameVM["status"],
     statusDetail: g.statusDetail,
     locked: started(g),
@@ -305,6 +315,8 @@ export async function loadTdWeek(
     if (!game) return [];
     const gameLines = lines.get(game.id);
     const index = indexes.get(game.id);
+    const box = boxes.get(game.id) ?? null;
+    const scored = box?.scorers.includes(pick.athleteId) ?? false;
     return [
       {
         user: pick.userName,
@@ -318,11 +330,8 @@ export async function loadTdWeek(
         locked: started(game),
         line: gameLines ? gameLines.has(pick.athleteId) : null,
         price: index ? priceFor(index, pick.athleteName) : null,
-        result: gradeLeg(
-          game.status as TdGameVM["status"],
-          boxes.get(game.id) ?? null,
-          pick.athleteId
-        ),
+        result: gradeLeg(game.status as TdGameVM["status"], box, pick.athleteId),
+        tds: scored ? (box?.counts?.[pick.athleteId] ?? 1) : 0,
       },
     ];
   });

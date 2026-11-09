@@ -97,3 +97,37 @@ export function gradeLeg(
   if (!box) return "pending";
   return box.appeared.includes(athleteId) ? "miss" : "void";
 }
+
+export type ParlayState = "open" | "alive" | "busted" | "cashed";
+
+/**
+ * Where the whole ticket stands. One miss busts it; a void leg drops out and
+ * the rest still pay; it has cashed once every leg is in and none missed.
+ * "open" is before any leg has been decided either way.
+ */
+export function parlayState(results: LegResult[]): {
+  state: ParlayState;
+  hit: number;
+  miss: number;
+  live: number;
+  pending: number;
+  void: number;
+} {
+  const count = (r: LegResult) => results.filter((x) => x === r).length;
+  const tally = {
+    hit: count("hit"),
+    miss: count("miss"),
+    live: count("live"),
+    pending: count("pending"),
+    void: count("void"),
+  };
+  const state: ParlayState =
+    tally.miss > 0
+      ? "busted"
+      : results.length > 0 && tally.live + tally.pending === 0 && tally.hit > 0
+        ? "cashed"
+        : tally.hit > 0
+          ? "alive"
+          : "open";
+  return { state, ...tally };
+}

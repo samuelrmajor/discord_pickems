@@ -119,13 +119,18 @@ export type BoxScore = {
   scorers: string[];
   /** Everyone who recorded any stat — used to tell "didn't score" from "didn't play". */
   appeared: string[];
+  /**
+   * Touchdowns per scorer. Optional because box scores cached before it was
+   * added don't carry it; a scorer missing from it has at least one.
+   */
+  counts?: Record<string, number>;
 };
 
 export async function fetchBoxScore(gameId: string): Promise<BoxScore> {
   const data = await fetchJson(`${SITE}/summary?event=${gameId}`);
   const teams = ((data.boxscore as Json | undefined)?.players as Json[] | undefined) ?? [];
 
-  const scorers = new Set<string>();
+  const counts: Record<string, number> = {};
   const appeared = new Set<string>();
 
   for (const team of teams) {
@@ -137,9 +142,14 @@ export async function fetchBoxScore(gameId: string): Promise<BoxScore> {
         if (!id) continue;
         appeared.add(id);
         const values = (row.stats as string[] | undefined) ?? [];
-        if (tdColumns.some((i) => Number(values[i]) > 0)) scorers.add(id);
+        // One athlete shows up under several categories (rushing, receiving,
+        // returns), so his touchdowns are summed across all of them.
+        for (const i of tdColumns) {
+          const n = Number(values[i]);
+          if (n > 0) counts[id] = (counts[id] ?? 0) + n;
+        }
       }
     }
   }
-  return { scorers: [...scorers], appeared: [...appeared] };
+  return { scorers: Object.keys(counts), appeared: [...appeared], counts };
 }

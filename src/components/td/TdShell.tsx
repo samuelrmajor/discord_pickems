@@ -7,13 +7,9 @@ import { logout } from "@/app/login/actions";
 import { clearPick, pickPlayer, previewPlayer } from "@/app/touchdowns/actions";
 import { dayLabel, timeShort } from "@/lib/format";
 import type { TdGameVM, TdLegVM, TdPlayerVM } from "@/lib/td/data";
-import {
-  formatAmerican,
-  formatAmericanLong,
-  nameKey,
-  quoteParlay,
-  type LegResult,
-} from "@/lib/td/odds";
+import { formatAmerican, formatAmericanLong, nameKey, quoteParlay } from "@/lib/td/odds";
+import { Chip, Headshot, PriceBadge, ResultPill, TeamLogo, display } from "./bits";
+import TdResults from "./TdResults";
 
 type Props = {
   user: string;
@@ -28,17 +24,13 @@ type Props = {
   pricesEnabled: boolean;
 };
 
+type TabKey = "pick" | "results";
+
 const POSITIONS = ["All", "RB", "WR", "TE", "QB"] as const;
 type PosFilter = (typeof POSITIONS)[number];
 
 /** How many search rows to render. The pool is ~500 players; nobody scrolls that. */
 const RESULT_LIMIT = 40;
-
-const display = (name: string) =>
-  name
-    .split("_")
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join(" ");
 
 export default function TdShell({
   user,
@@ -53,6 +45,22 @@ export default function TdShell({
   pricesEnabled,
 }: Props) {
   const router = useRouter();
+  const mine = legs.find((l) => l.user === user) ?? null;
+  const openGames = games.filter((g) => !g.locked);
+
+  /**
+   * Land where there's something to do: on Pick while you still owe a pick
+   * that can be made, otherwise on Results once any leg is underway — which is
+   * every Sunday, for everyone, without a tap.
+   */
+  const defaultTab: TabKey =
+    !mine && openGames.length > 0
+      ? "pick"
+      : legs.some((l) => l.locked) || openGames.length === 0
+        ? "results"
+        : "pick";
+  const [tab, setTab] = useState<TabKey>(defaultTab);
+
   const [query, setQuery] = useState("");
   const [pos, setPos] = useState<PosFilter>("All");
   const [gameFilter, setGameFilter] = useState<string>("all");
@@ -68,11 +76,19 @@ export default function TdShell({
   const [sheets, setSheets] = useState<Record<string, Record<string, number>>>({});
 
   const gameById = useMemo(() => new Map(games.map((g) => [g.id, g])), [games]);
+  const logos = useMemo(() => {
+    const out = new Map<string, string | null>();
+    for (const g of games) {
+      out.set(g.homeAbbr, g.homeLogo);
+      out.set(g.awayAbbr, g.awayLogo);
+    }
+    return out;
+  }, [games]);
+  const logoOf = (team: string) => logos.get(team) ?? null;
 
   const priceOf = (gameId: string, name: string, fallback: number | null) =>
     sheets[gameId]?.[nameKey(name)] ?? fallback;
 
-  const mine = legs.find((l) => l.user === user) ?? null;
   const mineLocked = mine?.locked ?? false;
   const legPrices = legs.map((l) => priceOf(l.gameId, l.name, l.price));
   const quote = quoteParlay(legPrices, stake);
@@ -97,8 +113,6 @@ export default function TdShell({
         a.name.localeCompare(b.name)
     )
     .slice(0, RESULT_LIMIT);
-
-  const openGames = games.filter((g) => !g.locked);
 
   const copy = async () => {
     const lines = [
@@ -144,11 +158,15 @@ export default function TdShell({
 
   const first = weeks[0] ?? week;
   const last = weeks[weeks.length - 1] ?? week;
+  const tabs: { key: TabKey; label: string; dot: boolean }[] = [
+    { key: "pick", label: "Pick", dot: !mine && openGames.length > 0 },
+    { key: "results", label: "Results", dot: legs.some((l) => l.result === "live") },
+  ];
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-lg pb-10">
       <header className="border-b border-[var(--line)] bg-[var(--bg)]">
-        <div className="flex items-center justify-between px-2 py-1.5">
+        <div className="flex items-center justify-between px-2 pt-1.5">
           <div className="flex items-center gap-1">
             <Link
               href="/"
@@ -182,9 +200,47 @@ export default function TdShell({
             </WeekArrow>
           </div>
         </div>
+
+        <nav className="flex gap-1 px-2 pb-1.5 pt-1" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => setTab(t.key)}
+              className={`h-8 flex-1 rounded-lg text-[13px] font-semibold transition ${
+                tab === t.key
+                  ? "bg-[var(--panel-2)] text-[var(--text)]"
+                  : "text-[var(--muted)] active:bg-[var(--panel)]"
+              }`}
+            >
+              {t.label}
+              {t.dot && (
+                <span
+                  className={`ml-1 inline-block h-1.5 w-1.5 rounded-full align-middle ${
+                    t.key === "pick" ? "bg-[var(--warn)]" : "animate-pulse bg-[var(--warn)]"
+                  }`}
+                />
+              )}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <main className="px-2 pt-2">
+      <main>
+      <div hidden={tab !== "results"}>
+        <TdResults
+          user={user}
+          members={members}
+          legs={legs}
+          games={games}
+          legPrices={legPrices}
+          stake={stake}
+          logoOf={logoOf}
+        />
+      </div>
+
+      <div hidden={tab !== "pick"} className="px-2 pt-2">
         {/* ------------------------------------------------ parlay summary */}
         <section className="flex items-center gap-2 rounded-lg bg-[var(--panel)] px-3 py-2">
           <div className="min-w-0 flex-1">
@@ -201,12 +257,10 @@ export default function TdShell({
                 <>
                   ${stake} pays{" "}
                   <span className="font-semibold text-[var(--text)]">
-                    $
-                    {quote.payout.toLocaleString("en-US", {
-                      maximumFractionDigits: 0,
-                    })}
+                    ${quote.payout.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                   </span>
-                  {quote.unpriced > 0 && ` · ${quote.unpriced} leg${quote.unpriced === 1 ? "" : "s"} unpriced`}
+                  {quote.unpriced > 0 &&
+                    ` · ${quote.unpriced} leg${quote.unpriced === 1 ? "" : "s"} unpriced`}
                 </>
               ) : pricesEnabled ? (
                 "No prices yet — open a player to fetch their game's prices"
@@ -238,20 +292,19 @@ export default function TdShell({
             Your pick
           </h2>
           {mine ? (
-            <div className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-3 py-2">
+            <div className="flex items-center gap-2.5 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-2.5 py-2">
+              <Headshot athleteId={mine.athleteId} logo={logoOf(mine.team)} size={44} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-semibold">{mine.name}</p>
-                <p className="text-[10px] text-[var(--muted)]">
-                  {mine.team} {mine.pos} · {mine.shortName} · {dayLabel(new Date(mine.kickoffAt))}{" "}
+                <p className="truncate text-[10px] text-[var(--muted)]">
+                  <TeamLogo logo={logoOf(mine.team)} size={11} /> {mine.team} {mine.pos} ·{" "}
+                  {mine.shortName} · {dayLabel(new Date(mine.kickoffAt)).split(",")[0]}{" "}
                   {timeShort(new Date(mine.kickoffAt))}
                 </p>
               </div>
-              <PriceBadge
-                line={mine.line}
-                price={priceOf(mine.gameId, mine.name, mine.price)}
-              />
+              <PriceBadge line={mine.line} price={priceOf(mine.gameId, mine.name, mine.price)} />
               {mineLocked ? (
-                <ResultBadge result={mine.result} />
+                <ResultPill result={mine.result} tds={mine.tds} />
               ) : (
                 <button
                   onClick={onClear}
@@ -319,12 +372,10 @@ export default function TdShell({
                         setError(null);
                         setSelected(p);
                       }}
-                      className="flex w-full items-center gap-2 border-b border-[var(--line)] py-2 text-left
+                      className="flex w-full items-center gap-2.5 border-b border-[var(--line)] py-1.5 text-left
                                  active:bg-[var(--panel)] disabled:opacity-45"
                     >
-                      <span className="w-7 shrink-0 text-center text-[10px] font-bold text-[var(--muted)]">
-                        {p.pos}
-                      </span>
+                      <Headshot athleteId={p.id} logo={logoOf(p.team)} size={36} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-semibold">
                           {p.name}
@@ -334,9 +385,10 @@ export default function TdShell({
                             </span>
                           )}
                         </span>
-                        <span className="block text-[10px] text-[var(--muted)]">
-                          {p.team} vs {p.opp}
-                          {game && ` · ${dayLabel(new Date(game.kickoffAt)).split(",")[0]} ${timeShort(new Date(game.kickoffAt))}`}
+                        <span className="block truncate text-[10px] text-[var(--muted)]">
+                          <TeamLogo logo={logoOf(p.team)} size={11} /> {p.team} {p.pos} vs {p.opp}
+                          {game &&
+                            ` · ${dayLabel(new Date(game.kickoffAt)).split(",")[0]} ${timeShort(new Date(game.kickoffAt))}`}
                           {taken && ` · ${display(p.takenBy!)} has him`}
                           {isMine && " · your pick"}
                         </span>
@@ -353,50 +405,12 @@ export default function TdShell({
           </section>
         )}
 
-        {/* ------------------------------------------------ the board */}
-        <section className="mt-4">
-          <h2 className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-            The parlay
-          </h2>
-          <ol>
-            {members.map((member) => {
-              const leg = legs.find((l) => l.user === member);
-              return (
-                <li
-                  key={member}
-                  className="flex items-center gap-2 border-b border-[var(--line)] py-1.5 last:border-b-0"
-                >
-                  <span
-                    className={`w-16 shrink-0 truncate text-[11px] font-semibold ${
-                      member === user ? "text-[var(--accent)]" : "text-[var(--muted)]"
-                    }`}
-                  >
-                    {display(member)}
-                  </span>
-                  {leg ? (
-                    <>
-                      <span className="min-w-0 flex-1 truncate text-[12px]">
-                        <span className="font-semibold">{leg.name}</span>
-                        <span className="pl-1 text-[10px] text-[var(--muted)]">
-                          {leg.team} {leg.pos}
-                        </span>
-                      </span>
-                      <PriceBadge line={leg.line} price={priceOf(leg.gameId, leg.name, leg.price)} />
-                      <ResultBadge result={leg.result} />
-                    </>
-                  ) : (
-                    <span className="flex-1 text-[11px] text-[var(--muted)]">—</span>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-          <p className="px-1 pt-3 text-[10px] leading-relaxed text-[var(--muted)]">
-            One player each, no doubling up. A pick locks when its game kicks off. Lines are
-            DraftKings&apos; anytime-TD market via ESPN; a player who doesn&apos;t suit up is void, the
-            way the book settles it.
-          </p>
-        </section>
+        <p className="px-1 pt-4 text-[10px] leading-relaxed text-[var(--muted)]">
+          One player each, no doubling up. A pick locks when its game kicks off. Lines are
+          DraftKings&apos; anytime-TD market via ESPN; a player who doesn&apos;t suit up is void, the
+          way the book settles it. Everyone&apos;s picks are on Results.
+        </p>
+      </div>
       </main>
 
       {selected && (
@@ -404,9 +418,12 @@ export default function TdShell({
           key={selected.id}
           week={week}
           player={selected}
+          logo={logoOf(selected.team)}
           game={gameById.get(selected.gameId) ?? null}
           replacing={mine}
-          legPrices={legs.filter((l) => l.user !== user).map((l) => priceOf(l.gameId, l.name, l.price))}
+          legPrices={legs
+            .filter((l) => l.user !== user)
+            .map((l) => priceOf(l.gameId, l.name, l.price))}
           stake={stake}
           pricesEnabled={pricesEnabled}
           pending={pending}
@@ -428,6 +445,7 @@ export default function TdShell({
 function PreviewSheet({
   week,
   player,
+  logo,
   game,
   replacing,
   legPrices,
@@ -441,6 +459,7 @@ function PreviewSheet({
 }: {
   week: number;
   player: TdPlayerVM;
+  logo: string | null;
   game: TdGameVM | null;
   replacing: TdLegVM | null;
   /** Everyone else's leg prices — the parlay this pick would join. */
@@ -498,11 +517,20 @@ function PreviewSheet({
         }}
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--line)]" />
-        <p className="text-[18px] font-bold leading-tight">{player.name}</p>
-        <p className="text-[11px] text-[var(--muted)]">
-          {player.team} {player.pos} vs {player.opp}
-          {game && ` · ${dayLabel(new Date(game.kickoffAt))} ${timeShort(new Date(game.kickoffAt))}`}
-        </p>
+        <div className="flex items-center gap-3">
+          <Headshot athleteId={player.id} logo={logo} size={64} />
+          <div className="min-w-0">
+            <p className="truncate text-[18px] font-bold leading-tight">{player.name}</p>
+            <p className="text-[11px] text-[var(--muted)]">
+              <TeamLogo logo={logo} size={12} /> {player.team} {player.pos} vs {player.opp}
+            </p>
+            {game && (
+              <p className="text-[11px] text-[var(--muted)]">
+                {dayLabel(new Date(game.kickoffAt))} {timeShort(new Date(game.kickoffAt))}
+              </p>
+            )}
+          </div>
+        </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Stat label="Anytime TD">
@@ -582,62 +610,6 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
       <p className="text-[9px] font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</p>
       <p className="text-[16px] font-bold tabular-nums">{children}</p>
     </div>
-  );
-}
-
-function PriceBadge({ line, price }: { line: boolean | null; price: number | null }) {
-  if (price !== null) {
-    return (
-      <span className="w-12 shrink-0 text-right text-[12px] font-bold tabular-nums">
-        {formatAmerican(price)}
-      </span>
-    );
-  }
-  if (line === false) {
-    return (
-      <span className="w-12 shrink-0 text-right text-[9px] font-semibold uppercase text-[var(--warn)]">
-        no line
-      </span>
-    );
-  }
-  return (
-    <span className="w-12 shrink-0 text-right text-[9px] font-semibold uppercase text-[var(--muted)]">
-      {line ? "line" : "?"}
-    </span>
-  );
-}
-
-const RESULT_STYLE: Record<LegResult, { label: string; cls: string }> = {
-  hit: { label: "TD", cls: "text-[var(--accent)]" },
-  miss: { label: "miss", cls: "text-[var(--loss)]" },
-  void: { label: "void", cls: "text-[var(--muted)]" },
-  live: { label: "live", cls: "text-[var(--warn)]" },
-  pending: { label: "", cls: "text-[var(--muted)]" },
-};
-
-function ResultBadge({ result }: { result: LegResult }) {
-  const { label, cls } = RESULT_STYLE[result];
-  return <span className={`w-9 shrink-0 text-right text-[10px] font-semibold ${cls}`}>{label}</span>;
-}
-
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`h-7 shrink-0 rounded-lg px-2.5 text-[11px] font-semibold transition ${
-        active ? "bg-[var(--panel-2)] text-[var(--text)]" : "bg-[var(--panel)] text-[var(--muted)]"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 

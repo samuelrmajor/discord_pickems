@@ -10,6 +10,7 @@ import {
   formatAmericanLong,
   gradeLeg,
   nameKey,
+  parlayState,
   quoteParlay,
 } from "../src/lib/td/odds";
 
@@ -107,6 +108,30 @@ check("a player missing from a final box score didn't play: void", () => {
 check("before kickoff, or with no box score read yet, nothing is called", () => {
   assert.equal(gradeLeg("scheduled", null, "1"), "pending");
   assert.equal(gradeLeg("final", null, "1"), "pending");
+});
+
+console.log("parlay state");
+
+check("nothing decided yet is open", () => {
+  assert.equal(parlayState(["pending", "live"]).state, "open");
+});
+
+check("hits with legs still to play is alive", () => {
+  const s = parlayState(["hit", "live", "pending"]);
+  assert.equal(s.state, "alive");
+  assert.deepEqual([s.hit, s.live, s.pending], [1, 1, 1]);
+});
+
+check("one busted leg busts the ticket, whatever else hit", () => {
+  assert.equal(parlayState(["hit", "hit", "miss", "pending"]).state, "busted");
+});
+
+check("every leg in with none busted cashes, voids and all", () => {
+  assert.equal(parlayState(["hit", "void", "hit"]).state, "cashed");
+});
+
+check("an all-void ticket hasn't cashed anything", () => {
+  assert.equal(parlayState(["void", "void"]).state, "open");
 });
 
 console.log(`\n${checks} checks passed.`);
