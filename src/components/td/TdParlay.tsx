@@ -70,8 +70,10 @@ export default function TdParlay({
   // Everyone gets a row, so a missing pick is as plain as a busted one.
   const missing = members.filter((m) => !legs.some((l) => l.user === m));
 
+  const rows = sorted.length + missing.length;
+
   return (
-    <div className="px-2 pb-8 pt-2">
+    <div className="flex h-full flex-col gap-1.5 px-2 pb-2 pt-1.5">
       {legs.length > 0 && (
         <StatusCard
           state={status.state}
@@ -80,17 +82,26 @@ export default function TdParlay({
           american={quote.priced ? quote.american : null}
           payout={quote.priced ? quote.payout : null}
           stake={stake}
+          live={anyLive}
         />
       )}
 
-      <ol className="mt-2 grid gap-1.5">
+      {/*
+        Every member on one screen, no scrolling: the rows split whatever height
+        is left, up to a comfortable 52px each on a tall phone, and shrink to
+        fit a short one.
+      */}
+      <ol
+        className="grid min-h-0 flex-1 content-start gap-1"
+        style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 52px))` }}
+      >
         {sorted.map((leg) => {
           const game = gameById.get(leg.gameId) ?? null;
           const mine = leg.user === user;
           return (
             <li
               key={leg.user}
-              className={`flex items-center gap-2.5 rounded-xl border bg-[var(--panel)] px-2.5 py-2 ${
+              className={`flex min-h-0 items-center gap-2 overflow-hidden rounded-lg border bg-[var(--panel)] px-2 ${
                 leg.result === "hit"
                   ? "border-[var(--accent)]/50"
                   : leg.result === "miss"
@@ -98,23 +109,33 @@ export default function TdParlay({
                     : "border-[var(--line)]"
               }`}
             >
-              <Headshot athleteId={leg.athleteId} logo={logoOf(leg.team)} size={44} />
-              <div className="min-w-0 flex-1">
-                <p
-                  className={`truncate text-[14px] font-semibold leading-tight ${
-                    leg.result === "miss" ? "line-through decoration-[var(--loss)]/60" : ""
-                  }`}
-                >
-                  {leg.name}
-                </p>
-                <p className="truncate text-[10px] text-[var(--muted)]">
-                  <TeamLogo logo={logoOf(leg.team)} size={11} /> {leg.team} {leg.pos}
-                  <span className="px-1">·</span>
-                  <span className={mine ? "font-semibold text-[var(--accent)]" : "text-[var(--text)]"}>
+              <Headshot athleteId={leg.athleteId} logo={logoOf(leg.team)} size={28} />
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="flex items-baseline gap-1.5 text-[13px]">
+                  <span
+                    className={`truncate font-semibold ${
+                      leg.result === "miss" ? "line-through decoration-[var(--loss)]/60" : ""
+                    }`}
+                  >
+                    {leg.name}
+                  </span>
+                  <span
+                    className={`shrink-0 text-[10px] font-semibold ${
+                      mine ? "text-[var(--accent)]" : "text-[var(--muted)]"
+                    }`}
+                  >
                     {display(leg.user)}
                   </span>
                 </p>
-                {game && <GameLine game={game} team={leg.team} />}
+                <p className="truncate text-[10px] text-[var(--muted)]">
+                  <TeamLogo logo={logoOf(leg.team)} size={10} /> {leg.team} {leg.pos}
+                  {game && (
+                    <>
+                      <span className="px-1">·</span>
+                      <GameLine game={game} team={leg.team} />
+                    </>
+                  )}
+                </p>
               </div>
               <ResultPill result={leg.result} tds={leg.tds} />
             </li>
@@ -124,33 +145,25 @@ export default function TdParlay({
         {missing.map((member) => (
           <li
             key={member}
-            className="flex items-center gap-2.5 rounded-xl border border-dashed border-[var(--line)] px-2.5 py-2"
+            className="flex min-h-0 items-center gap-2 overflow-hidden rounded-lg border border-dashed border-[var(--line)] px-2"
           >
             <span
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--panel-2)]
-                         text-[15px] font-bold text-[var(--muted)]"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--panel-2)]
+                         text-[12px] font-bold text-[var(--muted)]"
             >
               {display(member).charAt(0)}
             </span>
-            <div className="min-w-0 flex-1">
-              <p
-                className={`truncate text-[14px] font-semibold leading-tight ${
-                  member === user ? "text-[var(--accent)]" : ""
-                }`}
-              >
+            <p className="min-w-0 flex-1 truncate text-[13px] leading-tight">
+              <span className={`font-semibold ${member === user ? "text-[var(--accent)]" : ""}`}>
                 {display(member)}
-              </p>
-              <p className="text-[10px] text-[var(--muted)]">
-                {picksOpen ? "Hasn't made a selection yet" : "No selection this week"}
-              </p>
-            </div>
+              </span>
+              <span className="pl-1.5 text-[10px] text-[var(--muted)]">
+                {picksOpen ? "hasn't made a selection yet" : "no selection this week"}
+              </span>
+            </p>
           </li>
         ))}
       </ol>
-
-      {anyLive && (
-        <p className="px-1 pt-3 text-[10px] text-[var(--muted)]">Updates every minute while games are on.</p>
-      )}
     </div>
   );
 }
@@ -160,9 +173,9 @@ function GameLine({ game, team }: { game: TdGameVM; team: string }) {
   if (game.status === "scheduled") {
     const at = new Date(game.kickoffAt);
     return (
-      <p className="text-[10px] text-[var(--muted)]">
+      <span>
         {game.shortName} · {dayLabel(at).split(",")[0]} {timeShort(at)}
-      </p>
+      </span>
     );
   }
   const home = game.homeAbbr === team;
@@ -171,7 +184,7 @@ function GameLine({ game, team }: { game: TdGameVM; team: string }) {
     ? { abbr: game.awayAbbr, score: game.awayScore }
     : { abbr: game.homeAbbr, score: game.homeScore };
   return (
-    <p className="text-[10px] tabular-nums text-[var(--muted)]">
+    <span className="tabular-nums">
       <span className="text-[var(--text)]">
         {us.abbr} {us.score ?? 0}
       </span>{" "}
@@ -179,7 +192,7 @@ function GameLine({ game, team }: { game: TdGameVM; team: string }) {
       <span className={`pl-1 ${game.status === "in_progress" ? "text-[var(--warn)]" : ""}`}>
         · {game.statusDetail}
       </span>
-    </p>
+    </span>
   );
 }
 
@@ -190,6 +203,7 @@ function StatusCard({
   american,
   payout,
   stake,
+  live,
 }: {
   state: ReturnType<typeof parlayState>["state"];
   tally: { hit: number; miss: number; live: number; pending: number; void: number };
@@ -197,6 +211,8 @@ function StatusCard({
   american: number | null;
   payout: number | null;
   stake: number;
+  /** A leg's game is on, so the board is refreshing itself. */
+  live: boolean;
 }) {
   const headline = {
     open: { text: `${legCount}-leg parlay`, cls: "text-[var(--text)]" },
@@ -212,20 +228,21 @@ function StatusCard({
     tally.miss && `${tally.miss} failed`,
     waiting && `${waiting} pending`,
     tally.void && `${tally.void} void`,
+    live && "live, updates every minute",
   ].filter(Boolean);
 
   return (
-    <section className="rounded-xl bg-[var(--panel)] px-3 py-2.5">
+    <section className="shrink-0 rounded-lg bg-[var(--panel)] px-3 py-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <p className={`text-[17px] font-bold leading-tight ${headline.cls}`}>{headline.text}</p>
+        <p className={`text-[15px] font-bold leading-tight ${headline.cls}`}>{headline.text}</p>
         {american !== null && (
           <p className="text-[13px] font-bold tabular-nums">{formatAmericanLong(american)}</p>
         )}
       </div>
-      <div className="mt-0.5 flex items-baseline justify-between gap-2 text-[10px] text-[var(--muted)]">
-        <span>{parts.join(" · ")}</span>
+      <div className="flex items-baseline justify-between gap-2 text-[10px] leading-tight text-[var(--muted)]">
+        <span className="truncate">{parts.join(" · ")}</span>
         {payout !== null && state !== "busted" && (
-          <span>
+          <span className="shrink-0">
             ${stake} {state === "cashed" ? "paid" : "pays"}{" "}
             <span className="font-semibold text-[var(--text)]">
               ${payout.toLocaleString("en-US", { maximumFractionDigits: 0 })}
@@ -234,12 +251,12 @@ function StatusCard({
         )}
       </div>
       {/* One bar segment per leg, so the whole ticket reads at a glance. */}
-      <div className="mt-2 flex gap-0.5">
+      <div className="mt-1 flex gap-0.5">
         {(["hit", "live", "pending", "void", "miss"] as const).flatMap((r) =>
           Array.from({ length: tally[r] }, (_, i) => (
             <span
               key={`${r}-${i}`}
-              className={`h-1.5 flex-1 rounded-full ${
+              className={`h-1 flex-1 rounded-full ${
                 r === "hit"
                   ? "bg-[var(--accent)]"
                   : r === "miss"

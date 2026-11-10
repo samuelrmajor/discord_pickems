@@ -167,8 +167,14 @@ export default function TdShell({
   ];
 
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-lg pb-10">
-      <header className="border-b border-[var(--line)] bg-[var(--bg)]">
+    // Parlay is a one-screen board: pinned to the viewport so all twelve legs fit
+    // without scrolling. Pick is a long search list and scrolls as usual.
+    <div
+      className={`mx-auto flex w-full max-w-lg flex-col ${
+        tab === "parlay" ? "h-dvh overflow-hidden" : "min-h-dvh pb-10"
+      }`}
+    >
+      <header className="shrink-0 border-b border-[var(--line)] bg-[var(--bg)]">
         <div className="flex items-center justify-between px-2 pt-1.5">
           <div className="flex items-center gap-1">
             <Link
@@ -230,8 +236,8 @@ export default function TdShell({
         </nav>
       </header>
 
-      <main>
-      <div hidden={tab !== "parlay"}>
+      <main className="flex min-h-0 flex-1 flex-col">
+      <div hidden={tab !== "parlay"} className="min-h-0 flex-1">
         <TdParlay
           user={user}
           members={members}

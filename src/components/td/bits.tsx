@@ -125,7 +125,7 @@ export function ResultPill({ result, tds = 0 }: { result: LegResult; tds?: numbe
   const { label, cls } = RESULT_STYLE[result];
   return (
     <span
-      className={`inline-flex h-6 min-w-[52px] shrink-0 items-center justify-center rounded-md px-2
+      className={`inline-flex h-5 min-w-[52px] shrink-0 items-center justify-center rounded-md px-1.5
                   text-[10px] font-bold uppercase ${cls}`}
     >
       {result === "live" && (
