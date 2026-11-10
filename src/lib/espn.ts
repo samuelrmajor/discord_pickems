@@ -150,6 +150,26 @@ export type SeasonCalendar = {
 };
 
 /**
+ * The week people are picking for, which runs a day ahead of ESPN's.
+ *
+ * ESPN holds the finished week as "current" until Wednesday, and the pages keep
+ * that on purpose so Monday and Tuesday can show results. But a Tuesday
+ * reminder is chasing next week's picks: once every game of the current week
+ * has kicked off there is nothing left in it to pick, so look ahead — unless
+ * there's no week after it.
+ */
+export function weekBeingPicked(
+  currentWeek: number,
+  weeks: WeekMeta[],
+  kickoffs: Date[],
+  now = new Date()
+): number {
+  const allStarted = kickoffs.length > 0 && kickoffs.every((k) => k.getTime() <= now.getTime());
+  const hasNext = weeks.some((w) => w.week === currentWeek + 1);
+  return allStarted && hasNext ? currentWeek + 1 : currentWeek;
+}
+
+/**
  * The live scoreboard tells us which season/week the NFL considers "now", plus
  * every regular-season week's boundaries. ESPN rolls the week over on Wednesday
  * ~3am ET, which is exactly the reset we want.

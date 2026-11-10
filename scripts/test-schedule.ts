@@ -14,6 +14,7 @@ import {
   type Recipient,
 } from "../src/lib/fantasy/messages";
 import { buildWeeks } from "../src/lib/fantasy/week";
+import { weekBeingPicked } from "../src/lib/espn";
 
 let checks = 0;
 function check(label: string, fn: () => void) {
@@ -289,6 +290,42 @@ check("an unreadable TD feed prints ? and chases nobody for it", () => {
   const table = nudgeMessage(3, [person({ name: "sam", td: null })])!.embeds![0].description!;
   assert.ok(/in\s+\?|--\s+\?/.test(table), table);
 });
+
+console.log("\nwhich NFL week the reminder chases");
+
+{
+  // Week 14: TNF Thu Dec 10, Sunday slate, MNF Mon Dec 14. ESPN calls it
+  // current until Wednesday Dec 16.
+  const cal = [
+    { week: 14, startDate: new Date("2026-12-09T08:00Z"), endDate: new Date("2026-12-16T07:59Z") },
+    { week: 15, startDate: new Date("2026-12-16T08:00Z"), endDate: new Date("2026-12-23T07:59Z") },
+  ];
+  const kickoffs = [
+    new Date("2026-12-11T01:15Z"),
+    new Date("2026-12-13T18:00Z"),
+    new Date("2026-12-15T01:15Z"),
+  ];
+
+  check("Tuesday, with every game played, chases next week", () => {
+    assert.equal(weekBeingPicked(14, cal, kickoffs, new Date("2026-12-15T19:00Z")), 15);
+  });
+
+  check("Thursday afternoon, before TNF, stays on this week", () => {
+    assert.equal(weekBeingPicked(14, cal, kickoffs, new Date("2026-12-10T19:00Z")), 14);
+  });
+
+  check("Sunday with Monday night still to come stays on this week", () => {
+    assert.equal(weekBeingPicked(14, cal, kickoffs, new Date("2026-12-14T19:00Z")), 14);
+  });
+
+  check("the last week has nowhere to roll to", () => {
+    assert.equal(weekBeingPicked(15, cal, kickoffs, new Date("2026-12-30T19:00Z")), 15);
+  });
+
+  check("no games read yet leaves the week alone", () => {
+    assert.equal(weekBeingPicked(14, cal, [], new Date("2026-12-15T19:00Z")), 14);
+  });
+}
 
 console.log("\nmanual test sends");
 

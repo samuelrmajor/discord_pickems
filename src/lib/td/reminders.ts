@@ -4,10 +4,8 @@
  * Only members the module is open to are included (it is gated in `modules`),
  * so a module still being tried out never chases the rest of the league.
  */
-import { fetchCalendar } from "../espn";
 import { canSeeModule } from "../modules";
-import { getWeekGames } from "../queries";
-import { ensureWeekFresh } from "../sync";
+import { syncPickingWeek } from "../sync";
 import { loadLines } from "./data";
 import { getWeekTdPicks } from "./picks";
 
@@ -34,11 +32,10 @@ export async function tdProgress(members: string[]): Promise<Map<string, TdCell>
   if (visible.length === 0) return new Map();
 
   try {
-    const { season, currentWeek } = await fetchCalendar();
-    await ensureWeekFresh(season, currentWeek);
-    const games = await getWeekGames(season, currentWeek);
+    // Next week's legs from Tuesday on, not the week ESPN still calls current.
+    const { season, week, games } = await syncPickingWeek();
     const [picks, lines] = await Promise.all([
-      getWeekTdPicks(season, currentWeek),
+      getWeekTdPicks(season, week),
       loadLines(games),
     ]);
 

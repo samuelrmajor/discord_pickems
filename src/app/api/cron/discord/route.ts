@@ -15,10 +15,9 @@ import {
   type Recipient,
 } from "@/lib/fantasy/messages";
 import { readSnapshot } from "@/lib/fantasy/snapshot";
-import { fetchCalendar } from "@/lib/espn";
-import { getWeekGames, getWeekPicks } from "@/lib/queries";
+import { getWeekPicks } from "@/lib/queries";
 import { buildSubmissions } from "@/lib/scoring";
-import { ensureWeekFresh } from "@/lib/sync";
+import { syncPickingWeek } from "@/lib/sync";
 import { remindersFor } from "@/lib/notifications";
 import { canSeeTd, tdProgress } from "@/lib/td/reminders";
 import {
@@ -170,7 +169,7 @@ async function forceOne(
 }
 
 /**
- * Everyone's pick'em card for the live NFL week, by login name.
+ * Everyone's pick'em card for the week being picked, by login name.
  *
  * Best effort by design: this reaches ESPN for the current week, and a reminder
  * that can still chase the poll is worth more than one that fails because a
@@ -178,9 +177,8 @@ async function forceOne(
  */
 async function pickemProgress(): Promise<Map<string, PickemCard> | null> {
   try {
-    const { season, currentWeek } = await fetchCalendar();
-    await ensureWeekFresh(season, currentWeek);
-    const games = await getWeekGames(season, currentWeek);
+    // Next week's card from Tuesday on, not the week ESPN still calls current.
+    const { games } = await syncPickingWeek();
     const picks = await getWeekPicks(games);
     const rows = buildSubmissions(
       MEMBERS.map((m) => m.name),

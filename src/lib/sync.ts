@@ -1,7 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { games } from "@/db/schema";
-import { fetchWeek, type EspnGame, type Side } from "./espn";
+import { games, type GameRow } from "@/db/schema";
+import { fetchCalendar, fetchWeek, weekBeingPicked, type EspnGame, type Side } from "./espn";
+import { getWeekGames } from "./queries";
 
 /** Refresh cadence: fast while games are live, lazy otherwise. */
 const STALE_LIVE_MS = 45 * 1000;
@@ -112,4 +113,25 @@ export async function ensureWeekFresh(season: number, week: number): Promise<voi
       console.error("syncWeek failed", { season, week, err });
     }
   }
+}
+
+/**
+ * The week a reminder should chase, with its games freshly synced. See
+ * `weekBeingPicked`: on a Tuesday this is next week, while ESPN (and the
+ * pages) still sit on the week just played.
+ */
+export async function syncPickingWeek(): Promise<{ season: number; week: number; games: GameRow[] }> {
+  const { season, currentWeek, weeks } = await fetchCalendar();
+  await ensureWeekFresh(season, currentWeek);
+  const current = await getWeekGames(season, currentWeek);
+
+  const week = weekBeingPicked(
+    currentWeek,
+    weeks,
+    current.map((g) => g.kickoffAt)
+  );
+  if (week === currentWeek) return { season, week, games: current };
+
+  await ensureWeekFresh(season, week);
+  return { season, week, games: await getWeekGames(season, week) };
 }
