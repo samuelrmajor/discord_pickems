@@ -44,8 +44,6 @@ export const MODULES: ModuleDef[] = [
     href: "/touchdowns",
     glyph: "T",
     live: true,
-    // Still being tried out; open it to the league once it has run a week.
-    restrictedTo: ["sam"],
   },
 ];
 
