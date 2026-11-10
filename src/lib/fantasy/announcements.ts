@@ -21,6 +21,8 @@ export type JobDef = {
   dayOffset: number;
   /** Eastern hour, 24h. */
   hour: number;
+  /** Minutes past the hour; on the hour if left out. */
+  minute?: number;
   /** The post only makes sense while the week is in this phase. */
   requires: "open" | "locked";
 };
@@ -33,19 +35,20 @@ export type JobDef = {
  */
 const GRACE_MS = 2 * 60 * 60 * 1000;
 
-/** Reminders run Tuesday, Wednesday and Thursday at 2pm ET. */
+/** Reminders run Tuesday, Wednesday and Thursday at 2:30pm ET. */
 const NUDGE_HOUR = 14;
+const NUDGE_MINUTE = 30;
 
 export const JOBS: JobDef[] = [
   { id: "open", dayOffset: 0, hour: 10, requires: "open" },
-  { id: "nudge-tue", dayOffset: 0, hour: NUDGE_HOUR, requires: "open" },
-  { id: "nudge-wed", dayOffset: 1, hour: NUDGE_HOUR, requires: "open" },
-  { id: "nudge-thu", dayOffset: 2, hour: NUDGE_HOUR, requires: "open" },
+  { id: "nudge-tue", dayOffset: 0, hour: NUDGE_HOUR, minute: NUDGE_MINUTE, requires: "open" },
+  { id: "nudge-wed", dayOffset: 1, hour: NUDGE_HOUR, minute: NUDGE_MINUTE, requires: "open" },
+  { id: "nudge-thu", dayOffset: 2, hour: NUDGE_HOUR, minute: NUDGE_MINUTE, requires: "open" },
 ];
 
 /** The instant a job is scheduled for, in the given week. */
 export function scheduledAt(job: JobDef, week: RankingWeek): Date {
-  return etToInstant(addDays(week.tuesday, job.dayOffset), job.hour);
+  return etToInstant(addDays(week.tuesday, job.dayOffset), job.hour, job.minute ?? 0);
 }
 
 /**

@@ -53,9 +53,9 @@ console.log("\nwhen posts fire");
 check("every post lands on its Eastern wall-clock time, all season", () => {
   const expected: Record<string, string> = {
     open: "Tue 10:00 AM",
-    "nudge-tue": "Tue 2:00 PM",
-    "nudge-wed": "Wed 2:00 PM",
-    "nudge-thu": "Thu 2:00 PM",
+    "nudge-tue": "Tue 2:30 PM",
+    "nudge-wed": "Wed 2:30 PM",
+    "nudge-thu": "Thu 2:30 PM",
   };
   for (const w of WEEKS) {
     for (const job of JOBS) {
@@ -64,13 +64,16 @@ check("every post lands on its Eastern wall-clock time, all season", () => {
   }
 });
 
-check("the reminders are Tuesday, Wednesday and Thursday at 2pm, and nothing else", () => {
+check("the reminders are Tuesday, Wednesday and Thursday at 2:30pm, and nothing else", () => {
   const nudges = JOBS.filter((j) => j.id.startsWith("nudge"));
   assert.deepEqual(
     nudges.map((j) => j.id),
     ["nudge-tue", "nudge-wed", "nudge-thu"]
   );
-  for (const job of nudges) assert.equal(job.hour, 14, job.id);
+  for (const job of nudges) {
+    assert.equal(job.hour, 14, job.id);
+    assert.equal(job.minute, 30, job.id);
+  }
 });
 
 check("nothing is scheduled to announce the results", () => {
