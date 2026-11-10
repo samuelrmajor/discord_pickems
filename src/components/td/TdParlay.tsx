@@ -221,12 +221,11 @@ function StatusCard({
     cashed: { text: "Cashed", cls: "text-[var(--accent)]" },
   }[state];
 
-  // Live and not-yet-kicked-off legs are both still pending; the bar keeps them apart.
-  const waiting = tally.live + tally.pending;
   const parts = [
     tally.hit && `${tally.hit} hit`,
     tally.miss && `${tally.miss} failed`,
-    waiting && `${waiting} pending`,
+    tally.live && `${tally.live} live`,
+    tally.pending && `${tally.pending} upcoming`,
     tally.void && `${tally.void} void`,
     live && "live, updates every minute",
   ].filter(Boolean);

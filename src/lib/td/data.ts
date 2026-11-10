@@ -244,6 +244,24 @@ export function priceFor(index: Record<string, number>, name: string): number | 
   return index[nameKey(name)] ?? null;
 }
 
+/**
+ * Each pick's anytime-TD price, by athlete id, for the Discord reminder. Same
+ * cache and credit rules as the page: only games someone has picked in, no
+ * more than once per game per `PRICE_TTL_MS`, and frozen at kickoff.
+ */
+export async function loadPickPrices(
+  weekGames: GameRow[],
+  picks: TdPickRow[]
+): Promise<Map<string, number | null>> {
+  const prices = await loadPrices(weekGames, new Set(picks.map((p) => p.gameId)), PRICE_TTL_MS);
+  return new Map(
+    picks.map((pick) => {
+      const sheet = prices.get(pick.gameId)?.value.prices;
+      return [pick.athleteId, sheet ? priceFor(priceIndex(sheet), pick.athleteName) : null];
+    })
+  );
+}
+
 // ---------------------------------------------------------------- assembly
 
 export async function loadTdWeek(

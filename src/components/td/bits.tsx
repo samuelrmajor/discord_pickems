@@ -109,15 +109,15 @@ export function PriceBadge({ line, price }: { line: boolean | null; price: numbe
 }
 
 /**
- * A leg is pending until it hits or fails. "live" is still pending — the game
- * is on and he hasn't scored — and only adds the pulsing dot.
+ * "Upcoming" until his game kicks off, "Live" while it's on and he hasn't
+ * scored, then Hit or Failed.
  */
 const RESULT_STYLE: Record<LegResult, { label: string; cls: string }> = {
   hit: { label: "Hit", cls: "bg-[var(--accent)] text-[var(--accent-ink)]" },
   miss: { label: "Failed", cls: "bg-[var(--loss)]/15 text-[var(--loss)]" },
   void: { label: "Void", cls: "bg-[var(--panel-2)] text-[var(--muted)]" },
-  live: { label: "Pending", cls: "bg-[var(--warn)]/15 text-[var(--warn)]" },
-  pending: { label: "Pending", cls: "bg-[var(--panel-2)] text-[var(--muted)]" },
+  live: { label: "Live", cls: "bg-[var(--warn)]/15 text-[var(--warn)]" },
+  pending: { label: "Upcoming", cls: "bg-[var(--panel-2)] text-[var(--muted)]" },
 };
 
 /** The leg's verdict as a pill. `tds` turns a hit into "Hit ×2" when he has more than one. */

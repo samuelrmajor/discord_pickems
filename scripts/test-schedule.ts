@@ -249,7 +249,7 @@ check("no TD column until the module is open to someone", () => {
 
 check("the checklist shows each player selection, shortened", () => {
   const league = [
-    person({ name: "sam", lockedIn: true, td: { player: "Justin Jefferson", noLine: false, done: true } }),
+    person({ name: "sam", lockedIn: true, td: { player: "Justin Jefferson", noLine: false, price: null, done: true } }),
     person({ name: "gus" }),
   ];
   const table = nudgeMessage(3, league)!.embeds![0].description!;
@@ -263,7 +263,7 @@ check("the checklist shows each player selection, shortened", () => {
 
 check("a missing TD pick is chased while games are still open", () => {
   const league = [
-    person({ name: "sam", lockedIn: true, td: { player: null, noLine: false, done: false } }),
+    person({ name: "sam", lockedIn: true, td: { player: null, noLine: false, price: null, done: false } }),
     settled("gus"),
   ];
   const msg = nudgeMessage(3, league)!;
@@ -273,14 +273,14 @@ check("a missing TD pick is chased while games are still open", () => {
 
 check("once every game has kicked off, a missing TD pick stops nagging", () => {
   const league = [
-    person({ name: "sam", lockedIn: true, td: { player: null, noLine: false, done: true } }),
+    person({ name: "sam", lockedIn: true, td: { player: null, noLine: false, price: null, done: true } }),
   ];
   assert.equal(nudgeMessage(3, league), null);
 });
 
 check("a pick with no DraftKings line is starred and explained", () => {
   const league = [
-    person({ name: "sam", td: { player: "Tyson Bagent", noLine: true, done: true } }),
+    person({ name: "sam", td: { player: "Tyson Bagent", noLine: true, price: null, done: true } }),
   ];
   const table = nudgeMessage(3, league)!.embeds![0].description!;
   assert.ok(table.includes("T.Bagent*"), table);
@@ -292,6 +292,48 @@ check("an unreadable TD feed prints ? and chases nobody for it", () => {
   assert.equal(nudgeMessage(3, league), null);
   const table = nudgeMessage(3, [person({ name: "sam", td: null })])!.embeds![0].description!;
   assert.ok(/in\s+\?|--\s+\?/.test(table), table);
+});
+
+check("each TD pick shows its odds, lined up under the header", () => {
+  const league = [
+    person({ name: "sam", td: { player: "Justin Jefferson", noLine: false, price: 150, done: true } }),
+    person({ name: "gus", td: { player: "Bijan Robinson", noLine: false, price: -120, done: true } }),
+    person({ name: "dom", td: { player: null, noLine: false, price: null, done: false } }),
+  ];
+  const lines = nudgeMessage(3, league)!.embeds![0].description!.split("\n");
+  const header = lines[1];
+  const sam = lines.find((l) => l.includes("J.Jefferson"))!;
+  const gus = lines.find((l) => l.includes("B.Robinson"))!;
+  assert.ok(sam.endsWith(" +150"), sam);
+  assert.ok(gus.endsWith(" -120"), gus);
+  assert.equal(header.indexOf("Odds") + 4, sam.length, "odds right-align under the header");
+  assert.ok(sam.length <= 44, `row is ${sam.length} wide`);
+});
+
+check("the parlay's combined odds and $12 payout close the checklist", () => {
+  // Two +100 legs: +300, and a dollar from each of the twelve pays $48.
+  const twelve = MEMBER_NAMES.slice(0, 12).map((name, i) =>
+    person({
+      name,
+      td:
+        i < 2
+          ? { player: `Player ${i}`, noLine: false, price: 100, done: true }
+          : { player: i === 2 ? "Unpriced Guy" : null, noLine: false, price: null, done: true },
+    })
+  );
+  const table = nudgeMessage(3, twelve.map((p, i) => (i === 0 ? { ...p, lockedIn: false } : p)))!
+    .embeds![0].description!;
+  const last = table.split("\n").at(-1)!;
+  assert.ok(last.includes("3 legs at **+300**"), last);
+  assert.ok(last.includes("$12 pays **$48**"), last);
+  assert.ok(last.includes("1 unpriced leg left out"), last);
+});
+
+check("no parlay line until some leg has a price", () => {
+  const league = [
+    person({ name: "sam", td: { player: "Justin Jefferson", noLine: false, price: null, done: true } }),
+  ];
+  assert.ok(!nudgeMessage(3, league)!.embeds![0].description!.includes("TD parlay"));
 });
 
 console.log("\nwhich NFL week the reminder chases");
