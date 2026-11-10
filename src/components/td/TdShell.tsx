@@ -9,7 +9,7 @@ import { dayLabel, timeShort } from "@/lib/format";
 import type { TdGameVM, TdLegVM, TdPlayerVM } from "@/lib/td/data";
 import { formatAmerican, formatAmericanLong, nameKey, quoteParlay } from "@/lib/td/odds";
 import { Chip, Headshot, PriceBadge, ResultPill, TeamLogo, display } from "./bits";
-import TdResults from "./TdResults";
+import TdParlay from "./TdParlay";
 
 type Props = {
   user: string;
@@ -24,7 +24,7 @@ type Props = {
   pricesEnabled: boolean;
 };
 
-type TabKey = "pick" | "results";
+type TabKey = "pick" | "parlay";
 
 const POSITIONS = ["All", "RB", "WR", "TE", "QB"] as const;
 type PosFilter = (typeof POSITIONS)[number];
@@ -50,14 +50,14 @@ export default function TdShell({
 
   /**
    * Land where there's something to do: on Pick while you still owe a pick
-   * that can be made, otherwise on Results once any leg is underway — which is
+   * that can be made, otherwise on Parlay once any leg is underway — which is
    * every Sunday, for everyone, without a tap.
    */
   const defaultTab: TabKey =
     !mine && openGames.length > 0
       ? "pick"
       : legs.some((l) => l.locked) || openGames.length === 0
-        ? "results"
+        ? "parlay"
         : "pick";
   const [tab, setTab] = useState<TabKey>(defaultTab);
 
@@ -97,6 +97,7 @@ export default function TdShell({
   // ~500 players; filtering them every render is cheaper than memoizing it.
   const q = nameKey(query);
   const rank = (p: TdPlayerVM) => (p.line === true ? 0 : p.line === null ? 1 : 2);
+  const isTaken = (p: TdPlayerVM) => p.takenBy !== null && p.takenBy !== user;
   const results = players
     .filter(
       (p) =>
@@ -105,9 +106,11 @@ export default function TdShell({
         (!q || nameKey(p.name).includes(q) || p.team.toLowerCase() === q)
     )
     .map((p) => ({ ...p, price: priceOf(p.gameId, p.name, p.price) }))
-    // Bettable first, then shortest price, so the obvious candidates lead.
+    // Still available first, then bettable, then shortest price, so the
+    // obvious candidates lead and anyone already picked sinks, greyed out.
     .sort(
       (a, b) =>
+        Number(isTaken(a)) - Number(isTaken(b)) ||
         rank(a) - rank(b) ||
         (a.price ?? 99999) - (b.price ?? 99999) ||
         a.name.localeCompare(b.name)
@@ -160,7 +163,7 @@ export default function TdShell({
   const last = weeks[weeks.length - 1] ?? week;
   const tabs: { key: TabKey; label: string; dot: boolean }[] = [
     { key: "pick", label: "Pick", dot: !mine && openGames.length > 0 },
-    { key: "results", label: "Results", dot: legs.some((l) => l.result === "live") },
+    { key: "parlay", label: "Parlay", dot: legs.some((l) => l.result === "live") },
   ];
 
   return (
@@ -228,14 +231,15 @@ export default function TdShell({
       </header>
 
       <main>
-      <div hidden={tab !== "results"}>
-        <TdResults
+      <div hidden={tab !== "parlay"}>
+        <TdParlay
           user={user}
           members={members}
           legs={legs}
           games={games}
           legPrices={legPrices}
           stake={stake}
+          picksOpen={openGames.length > 0}
           logoOf={logoOf}
         />
       </div>
@@ -362,7 +366,7 @@ export default function TdShell({
               {results.map((p) => {
                 const game = gameById.get(p.gameId);
                 const locked = game?.locked ?? true;
-                const taken = p.takenBy !== null && p.takenBy !== user;
+                const taken = isTaken(p);
                 const isMine = mine?.athleteId === p.id;
                 return (
                   <li key={p.id}>
@@ -372,8 +376,8 @@ export default function TdShell({
                         setError(null);
                         setSelected(p);
                       }}
-                      className="flex w-full items-center gap-2.5 border-b border-[var(--line)] py-1.5 text-left
-                                 active:bg-[var(--panel)] disabled:opacity-45"
+                      className={`flex w-full items-center gap-2.5 border-b border-[var(--line)] py-1.5 text-left
+                                 active:bg-[var(--panel)] disabled:opacity-45 ${taken ? "grayscale" : ""}`}
                     >
                       <Headshot athleteId={p.id} logo={logoOf(p.team)} size={36} />
                       <span className="min-w-0 flex-1">
@@ -389,11 +393,17 @@ export default function TdShell({
                           <TeamLogo logo={logoOf(p.team)} size={11} /> {p.team} {p.pos} vs {p.opp}
                           {game &&
                             ` · ${dayLabel(new Date(game.kickoffAt)).split(",")[0]} ${timeShort(new Date(game.kickoffAt))}`}
-                          {taken && ` · ${display(p.takenBy!)} has him`}
+                          {taken && ` · picked by ${display(p.takenBy!)}`}
                           {isMine && " · your pick"}
                         </span>
                       </span>
-                      <PriceBadge line={p.line} price={p.price} />
+                      {taken ? (
+                        <span className="w-12 shrink-0 text-right text-[9px] font-semibold uppercase text-[var(--muted)]">
+                          taken
+                        </span>
+                      ) : (
+                        <PriceBadge line={p.line} price={p.price} />
+                      )}
                     </button>
                   </li>
                 );
@@ -408,7 +418,7 @@ export default function TdShell({
         <p className="px-1 pt-4 text-[10px] leading-relaxed text-[var(--muted)]">
           One player each, no doubling up. A pick locks when its game kicks off. Lines are
           DraftKings&apos; anytime-TD market via ESPN; a player who doesn&apos;t suit up is void, the
-          way the book settles it. Everyone&apos;s picks are on Results.
+          way the book settles it. Everyone&apos;s picks are on Parlay.
         </p>
       </div>
       </main>

@@ -15,6 +15,8 @@ type Props = {
   /** Each leg's price, in `legs` order, with any prices fetched this session layered on. */
   legPrices: (number | null)[];
   stake: number;
+  /** Whether any game is still open to pick in, so a missing pick still has time. */
+  picksOpen: boolean;
   logoOf: (team: string) => string | null;
 };
 
@@ -22,18 +24,19 @@ type Props = {
 const LIVE_REFRESH_MS = 60 * 1000;
 
 /**
- * Settled legs read top-down in the order they matter during a Sunday: what is
+ * Legs read top-down in the order they matter during a Sunday: what is
  * happening now, then what is still to come, then what's already decided.
  */
 const ORDER: Record<LegResult, number> = { live: 0, pending: 1, hit: 2, miss: 3, void: 4 };
 
-export default function TdResults({
+export default function TdParlay({
   user,
   members,
   legs,
   games,
   legPrices,
   stake,
+  picksOpen,
   logoOf,
 }: Props) {
   const router = useRouter();
@@ -57,43 +60,36 @@ export default function TdResults({
     stake
   );
 
-  const sorted = legs
-    .map((leg, i) => ({ leg, price: legPrices[i] }))
-    .sort(
-      (a, b) =>
-        ORDER[a.leg.result] - ORDER[b.leg.result] ||
-        a.leg.kickoffAt.localeCompare(b.leg.kickoffAt) ||
-        a.leg.name.localeCompare(b.leg.name)
-    );
+  const sorted = [...legs].sort(
+    (a, b) =>
+      ORDER[a.result] - ORDER[b.result] ||
+      a.kickoffAt.localeCompare(b.kickoffAt) ||
+      a.name.localeCompare(b.name)
+  );
 
+  // Everyone gets a row, so a missing pick is as plain as a busted one.
   const missing = members.filter((m) => !legs.some((l) => l.user === m));
-
-  if (legs.length === 0) {
-    return (
-      <p className="px-4 py-10 text-center text-xs text-[var(--muted)]">
-        Nobody has picked yet this week.
-      </p>
-    );
-  }
 
   return (
     <div className="px-2 pb-8 pt-2">
-      <StatusCard
-        state={status.state}
-        tally={status}
-        legCount={legs.length}
-        american={quote.priced ? quote.american : null}
-        payout={quote.priced ? quote.payout : null}
-        stake={stake}
-      />
+      {legs.length > 0 && (
+        <StatusCard
+          state={status.state}
+          tally={status}
+          legCount={legs.length}
+          american={quote.priced ? quote.american : null}
+          payout={quote.priced ? quote.payout : null}
+          stake={stake}
+        />
+      )}
 
       <ol className="mt-2 grid gap-1.5">
-        {sorted.map(({ leg }) => {
+        {sorted.map((leg) => {
           const game = gameById.get(leg.gameId) ?? null;
           const mine = leg.user === user;
           return (
             <li
-              key={leg.athleteId}
+              key={leg.user}
               className={`flex items-center gap-2.5 rounded-xl border bg-[var(--panel)] px-2.5 py-2 ${
                 leg.result === "hit"
                   ? "border-[var(--accent)]/50"
@@ -124,15 +120,36 @@ export default function TdResults({
             </li>
           );
         })}
+
+        {missing.map((member) => (
+          <li
+            key={member}
+            className="flex items-center gap-2.5 rounded-xl border border-dashed border-[var(--line)] px-2.5 py-2"
+          >
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--panel-2)]
+                         text-[15px] font-bold text-[var(--muted)]"
+            >
+              {display(member).charAt(0)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p
+                className={`truncate text-[14px] font-semibold leading-tight ${
+                  member === user ? "text-[var(--accent)]" : ""
+                }`}
+              >
+                {display(member)}
+              </p>
+              <p className="text-[10px] text-[var(--muted)]">
+                {picksOpen ? "Hasn't made a selection yet" : "No selection this week"}
+              </p>
+            </div>
+          </li>
+        ))}
       </ol>
 
-      {missing.length > 0 && (
-        <p className="px-1 pt-3 text-[10px] text-[var(--muted)]">
-          No pick: {missing.map(display).join(", ")}
-        </p>
-      )}
       {anyLive && (
-        <p className="px-1 pt-1 text-[10px] text-[var(--muted)]">Updates every minute while games are on.</p>
+        <p className="px-1 pt-3 text-[10px] text-[var(--muted)]">Updates every minute while games are on.</p>
       )}
     </div>
   );
@@ -188,11 +205,12 @@ function StatusCard({
     cashed: { text: "Cashed", cls: "text-[var(--accent)]" },
   }[state];
 
+  // Live and not-yet-kicked-off legs are both still pending; the bar keeps them apart.
+  const waiting = tally.live + tally.pending;
   const parts = [
     tally.hit && `${tally.hit} hit`,
-    tally.miss && `${tally.miss} busted`,
-    tally.live && `${tally.live} live`,
-    tally.pending && `${tally.pending} to play`,
+    tally.miss && `${tally.miss} failed`,
+    waiting && `${waiting} pending`,
     tally.void && `${tally.void} void`,
   ].filter(Boolean);
 
