@@ -4,6 +4,8 @@
  */
 import assert from "node:assert/strict";
 import { pickAnnouncement, type PickAnnouncement } from "../src/lib/td/announce";
+import { lockPostsDue, pickemLockMessage, tdLockMessage } from "../src/lib/lock-posts";
+import type { ConsensusLeg } from "../src/lib/scoring";
 import { matchEvent } from "../src/lib/td/odds-api";
 import {
   americanToDecimal,
@@ -194,6 +196,73 @@ check("the post never pings anyone", () => {
   assert.deepEqual(m.mentions, []);
   assert.equal(m.everyone, false);
   assert.equal(m.content, undefined);
+});
+
+console.log("\n#gambling lock posts");
+
+const at = (iso: string) => new Date(iso);
+const THU = at("2026-11-13T01:15:00Z"); // Thu 8:15 PM ET
+const SUN = at("2026-11-15T18:00:00Z"); // Sun 1:00 PM ET
+
+check("the TD post: one short line per leg, by game time, then who's missing and the ticket", () => {
+  const leg = (who: string, player: string, kickoffAt: Date, price: number | null) => ({
+    who,
+    player,
+    matchup: "MIN @ CHI",
+    kickoffAt,
+    price,
+  });
+  const e = tdLockMessage(
+    11,
+    [leg("Sam", "Justin Jefferson", SUN, 100), leg("Gus", "Amon-Ra St. Brown", THU, 100)],
+    ["Josh"],
+    12,
+    12
+  ).embeds![0];
+  const lines = e.description!.split("\n");
+  assert.ok(e.title!.includes("Week 11 TD parlay"), e.title);
+  assert.equal(lines[0], "MIN @ CHI T 8pm | **Gus** A.St. Brown +100");
+  assert.equal(lines[1], "MIN @ CHI S 1pm | **Sam** J.Jefferson +100");
+  assert.ok(e.description!.includes("**No pick:** Josh"), e.description);
+  assert.ok(lines.at(-1)!.includes("**2/12** TD picks are in · current odds **+300**"), lines.at(-1));
+});
+
+check("the Pick'em post: away - home, the pick in bold, its votes, and the kickoff", () => {
+  const game = (id: string, away: string, home: string, kickoffAt: Date) =>
+    ({ id, awayAbbr: away, homeAbbr: home, kickoffAt }) as unknown as ConsensusLeg["game"];
+  const legs: ConsensusLeg[] = [
+    { game: game("2", "DAL", "NYG", SUN), side: "home", homeVotes: 6, awayVotes: 6, totalVotes: 12, decidedByCoinFlip: true, result: null },
+    { game: game("1", "MIN", "CHI", THU), side: "away", homeVotes: 3, awayVotes: 9, totalVotes: 12, decidedByCoinFlip: false, result: null },
+  ];
+  const lines = pickemLockMessage(11, legs).embeds![0].description!.split("\n");
+  assert.equal(lines[0], "**MIN** - CHI | 9/12 | T 8pm");
+  assert.equal(lines[1], "DAL - **NYG** | 6/12* | S 1pm");
+  assert.equal(lines.at(-1), "\\* tied, decided by coin flip");
+});
+
+check("no coin-flip footnote when nothing was tied", () => {
+  const game = { id: "1", awayAbbr: "MIN", homeAbbr: "CHI", kickoffAt: THU } as unknown as ConsensusLeg["game"];
+  const legs: ConsensusLeg[] = [
+    { game, side: "home", homeVotes: 8, awayVotes: 4, totalVotes: 12, decidedByCoinFlip: false, result: null },
+  ];
+  const text = pickemLockMessage(11, legs).embeds![0].description!;
+  assert.equal(text, "MIN - **CHI** | 8/12 | T 8pm");
+});
+
+check("lock posts are due from the first kickoff, for a few hours", () => {
+  const kicks = [SUN, THU];
+  assert.equal(lockPostsDue(kicks, at("2026-11-13T01:14:00Z")), false);
+  assert.equal(lockPostsDue(kicks, at("2026-11-13T01:15:00Z")), true);
+  assert.equal(lockPostsDue(kicks, at("2026-11-13T06:00:00Z")), true);
+  assert.equal(lockPostsDue(kicks, at("2026-11-13T08:00:00Z")), false);
+  assert.equal(lockPostsDue([], at("2026-11-13T02:00:00Z")), false);
+});
+
+check("lock posts never ping anyone", () => {
+  for (const m of [tdLockMessage(11, [], [], 12, 12), pickemLockMessage(11, [])]) {
+    assert.deepEqual(m.mentions, []);
+    assert.equal(m.everyone, false);
+  }
 });
 
 console.log(`\n${checks} checks passed.`);

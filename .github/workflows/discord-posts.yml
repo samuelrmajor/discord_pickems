@@ -11,6 +11,9 @@
 #   Wed  2:30pm  whoever hasn't locked in
 #   Thu  2:30pm  whoever hasn't locked in
 #
+# And to #gambling, once the week's first game (Thursday night) kicks off:
+# everyone's anytime-TD leg and the Pick'em consensus.
+#
 # There is no results post: Pat closes the week from the app and posts the
 # board by hand. Closing it also stops these reminders for the week.
 #
@@ -36,6 +39,7 @@ on:
           - nudge-tue
           - nudge-wed
           - nudge-thu
+          - gambling-lock
       ping:
         description: "Actually ping people (off = names only)"
         type: boolean

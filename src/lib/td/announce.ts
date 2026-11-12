@@ -73,7 +73,7 @@ function priceText(line: boolean | null, price: number | null): string {
 }
 
 /** "7/12 TD picks are in · current odds +12,345 · total payout on $12: $1,493" */
-function ticketLine(legs: (number | null)[], members: number, stake: number): string {
+export function ticketLine(legs: (number | null)[], members: number, stake: number): string {
   const head = `**${legs.length}/${members}** TD picks are in`;
   const quote = quoteParlay(legs, stake);
   if (quote.priced === 0) return `${head} · no prices yet`;
@@ -92,7 +92,7 @@ function ticketLine(legs: (number | null)[], members: number, stake: number): st
 }
 
 /** "Sun 1:00 PM ET" */
-function kickoff(at: Date): string {
+export function kickoff(at: Date): string {
   const text = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     weekday: "short",

@@ -3,10 +3,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { fantasyCache } from "@/db/schema";
 import { isAuthorizedCron } from "@/lib/cron-auth";
-import { DiscordNotConfigured, postToDiscord, type DiscordMessage } from "@/lib/discord";
+import {
+  DiscordNotConfigured,
+  postToDiscord,
+  postToGambling,
+  type DiscordMessage,
+} from "@/lib/discord";
 import { dueJobs, JOBS, type JobDef } from "@/lib/fantasy/announcements";
 import { getWeekBallots } from "@/lib/fantasy/ballots";
-import { MEMBERS } from "@/lib/fantasy/config";
+import { MEMBERS, memberByName } from "@/lib/fantasy/config";
 import { getLock } from "@/lib/fantasy/lock";
 import {
   asTestPost,
@@ -15,11 +20,15 @@ import {
   type Recipient,
 } from "@/lib/fantasy/messages";
 import { readSnapshot } from "@/lib/fantasy/snapshot";
+import { lockPostsDue, pickemLockMessage, tdLockMessage } from "@/lib/lock-posts";
 import { getWeekPicks } from "@/lib/queries";
-import { buildSubmissions } from "@/lib/scoring";
+import { buildConsensus, buildSubmissions } from "@/lib/scoring";
 import { syncPickingWeek } from "@/lib/sync";
 import { remindersFor } from "@/lib/notifications";
+import { legPrices } from "@/lib/td/data";
+import { getWeekTdPicks } from "@/lib/td/picks";
 import { canSeeTd, tdProgress } from "@/lib/td/reminders";
+import { USERS } from "@/lib/users";
 import {
   buildWeeks,
   currentRankingWeek,
@@ -62,8 +71,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const params = new URL(request.url).searchParams;
+  const forced = params.get("job");
+
+  if (forced === LOCK_JOB) {
+    return NextResponse.json(await lockPosts({ force: true, dry: params.get("dry") === "1" }));
+  }
+  // Independent of the Coach's Poll below, so it goes out even before there
+  // is a league snapshot, and a failure there can't hold it up.
+  const gambling = forced ? null : await lockPosts({ force: false, dry: false });
+
   const snapshot = await readSnapshot();
-  if (!snapshot) return NextResponse.json({ skipped: "no league snapshot yet" });
+  if (!snapshot) return NextResponse.json({ skipped: "no league snapshot yet", gambling });
 
   const weeks = buildWeeks(snapshot.seasonStartDate);
   const week = weeks[currentRankingWeek(weeks) - 1];
@@ -71,8 +90,6 @@ export async function GET(request: Request) {
   // has to be read from the database before anything can be judged due.
   const phase = phaseOf(week, (await getLock(snapshot.season, week.week)) !== null);
 
-  const params = new URL(request.url).searchParams;
-  const forced = params.get("job");
   if (forced) {
     return forceOne(forced, snapshot, week, {
       dry: params.get("dry") === "1",
@@ -82,7 +99,7 @@ export async function GET(request: Request) {
 
   const due = dueJobs(week, phase);
   if (due.length === 0) {
-    return NextResponse.json({ week: week.week, phase, due: [], sent: [] });
+    return NextResponse.json({ week: week.week, phase, due: [], sent: [], gambling });
   }
 
   const sent: string[] = [];
@@ -123,7 +140,87 @@ export async function GET(request: Request) {
     due: due.map((j) => j.id),
     sent,
     skipped,
+    gambling,
   });
+}
+
+/** The forced-run name for the #gambling lock posts, as the workflow sends it. */
+const LOCK_JOB = "gambling-lock";
+
+/**
+ * Once the week's first game (Thursday night) kicks off, post everyone's TD
+ * leg and the Pick'em consensus to #gambling — once per week, claimed like
+ * every other post.
+ *
+ * `force` sends now regardless of the clock or the claim, marked as a test, so
+ * trying it out never uses up the week's real posts. `dry` builds without posting.
+ */
+async function lockPosts(opts: { force: boolean; dry: boolean }): Promise<object> {
+  try {
+    const { season, week, games } = await syncPickingWeek();
+    if (!opts.force && !lockPostsDue(games.map((g) => g.kickoffAt))) return { week, due: false };
+
+    const key = `posted:${LOCK_JOB}:${season}:${week}`;
+    if (!opts.force && !(await claim(key))) return { week, due: true, skipped: "already sent" };
+
+    try {
+      const messages = await lockMessages(season, week, games);
+      if (opts.dry) return { week, dry: true, messages };
+      for (const message of messages) {
+        const sent = await postToGambling(opts.force ? asTestPost(message, false) : message);
+        if (!sent) {
+          if (!opts.force) await release(key);
+          return { week, skipped: "DISCORD_WEBHOOK_URL_GAMBLING is not set" };
+        }
+      }
+      return { week, sent: messages.length, test: opts.force };
+    } catch (err) {
+      // Hand the claim back so the next run retries. A retry after the TD post
+      // went through but the Pick'em one failed sends the TD post twice, which
+      // beats losing the Pick'em post for the week.
+      if (!opts.force) await release(key);
+      throw err;
+    }
+  } catch (err) {
+    console.error("#gambling lock posts failed", err);
+    return { error: "failed" };
+  }
+}
+
+async function lockMessages(
+  season: number,
+  week: number,
+  games: Awaited<ReturnType<typeof syncPickingWeek>>["games"]
+): Promise<DiscordMessage[]> {
+  const [tdPicks, pickemPicks] = await Promise.all([
+    getWeekTdPicks(season, week),
+    getWeekPicks(games),
+  ]);
+  const prices = await legPrices(games, tdPicks, null);
+  const gamesById = new Map(games.map((g) => [g.id, g]));
+  const nameOf = (user: string) => memberByName(user)?.realName ?? user;
+
+  const legs = tdPicks.flatMap((pick) => {
+    const game = gamesById.get(pick.gameId);
+    if (!game) return [];
+    return [
+      {
+        who: nameOf(pick.userName),
+        player: pick.athleteName,
+        matchup: `${game.awayAbbr} @ ${game.homeAbbr}`,
+        kickoffAt: game.kickoffAt,
+        price: prices.get(pick.athleteId) ?? null,
+      },
+    ];
+  });
+  const picked = new Set(tdPicks.map((p) => p.userName));
+  const missing = USERS.filter((u) => canSeeTd(u) && !picked.has(u)).map(nameOf);
+
+  return [
+    // A dollar a member, so the ticket is staked at the league size.
+    tdLockMessage(week, legs, missing, USERS.length, USERS.length),
+    pickemLockMessage(week, buildConsensus(games, pickemPicks)),
+  ];
 }
 
 type Snapshot = NonNullable<Awaited<ReturnType<typeof readSnapshot>>>;
