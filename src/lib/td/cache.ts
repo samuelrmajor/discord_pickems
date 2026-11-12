@@ -7,6 +7,7 @@
  * which matters when one cold roster pull is thirty 400KB requests.
  */
 import { inArray, sql } from "drizzle-orm";
+import { after } from "next/server";
 import { db } from "@/db";
 import { fantasyCache } from "@/db/schema";
 
@@ -51,4 +52,28 @@ export async function refresh<T>(
 
 export function isFresh(entry: Cached<unknown> | undefined, ttlMs: number): boolean {
   return !!entry && Date.now() - entry.fetchedAt.getTime() < ttlMs;
+}
+
+/**
+ * How a caller waits on a stale entry.
+ *
+ *  - "wait": refetch now and return the new value. For actions that need the
+ *    current answer — a pick being saved, a price being previewed.
+ *  - "background": return the stale copy straight away and refetch after the
+ *    response has gone out, so a page view never sits on ESPN or the Odds API
+ *    when it has something to show. A miss with nothing cached still waits.
+ */
+export type RefreshMode = "wait" | "background";
+
+export async function revalidate<T>(
+  key: string,
+  previous: Cached<T> | undefined,
+  load: () => Promise<T>,
+  mode: RefreshMode
+): Promise<T | null> {
+  if (mode === "background" && previous) {
+    after(() => refresh(key, previous, load));
+    return previous.value;
+  }
+  return refresh(key, previous, load);
 }

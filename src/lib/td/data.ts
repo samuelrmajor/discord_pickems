@@ -14,7 +14,7 @@
  * Previewing a player is what fetches a game's prices the first time.
  */
 import type { GameRow, TdPickRow } from "@/db/schema";
-import { isFresh, readMany, refresh, write, type Cached } from "./cache";
+import { isFresh, readMany, refresh, revalidate, write, type Cached, type RefreshMode } from "./cache";
 import { fetchAnytimeLines, fetchBoxScore, fetchRoster, type BoxScore, type RosterPlayer } from "./espn";
 import {
   fetchAnytimePrices,
@@ -114,7 +114,11 @@ export type TdWeek = {
 
 // ---------------------------------------------------------------- loaders
 
-async function loadRosters(season: number, weekGames: GameRow[]): Promise<RosterPlayer[]> {
+async function loadRosters(
+  season: number,
+  weekGames: GameRow[],
+  mode: RefreshMode = "wait"
+): Promise<RosterPlayer[]> {
   const teams = weekGames.flatMap((g) => [
     { team: g.homeAbbr, open: !started(g) },
     { team: g.awayAbbr, open: !started(g) },
@@ -128,13 +132,16 @@ async function loadRosters(season: number, weekGames: GameRow[]): Promise<Roster
       // A started game's players can't be picked, so there is no reason to pay
       // for a fresh roster — but a week opened cold still needs names once.
       if (hit && (!open || isFresh(hit, ROSTER_TTL_MS))) return hit.value;
-      return (await refresh(key, hit, () => fetchRoster(team))) ?? [];
+      return (await revalidate(key, hit, () => fetchRoster(team), mode)) ?? [];
     })
   );
   return lists.flat();
 }
 
-export async function loadLines(weekGames: GameRow[]): Promise<Map<string, Set<string>>> {
+export async function loadLines(
+  weekGames: GameRow[],
+  mode: RefreshMode = "wait"
+): Promise<Map<string, Set<string>>> {
   const cache = await readMany<string[]>(weekGames.map((g) => keys.lines(g.id)));
   const out = new Map<string, Set<string>>();
 
@@ -148,14 +155,17 @@ export async function loadLines(weekGames: GameRow[]): Promise<Map<string, Set<s
           ? hit.value
           : started(game)
             ? null
-            : await refresh(key, hit, () => fetchAnytimeLines(game.id));
+            : await revalidate(key, hit, () => fetchAnytimeLines(game.id), mode);
       if (ids) out.set(game.id, new Set(ids));
     })
   );
   return out;
 }
 
-async function loadBoxes(games: GameRow[]): Promise<Map<string, BoxScore>> {
+async function loadBoxes(
+  games: GameRow[],
+  mode: RefreshMode = "wait"
+): Promise<Map<string, BoxScore>> {
   const cache = await readMany<StoredBox>(games.map((g) => keys.box(g.id)));
   const out = new Map<string, BoxScore>();
 
@@ -167,10 +177,12 @@ async function loadBoxes(games: GameRow[]): Promise<Map<string, BoxScore>> {
       const box =
         hit && (frozen || isFresh(hit, BOX_LIVE_TTL_MS))
           ? hit.value
-          : await refresh(key, hit, async () => ({
-              ...(await fetchBoxScore(game.id)),
-              final: game.status === "final",
-            }));
+          : await revalidate(
+              key,
+              hit,
+              async () => ({ ...(await fetchBoxScore(game.id)), final: game.status === "final" }),
+              mode
+            );
       if (box) out.set(game.id, box);
     })
   );
@@ -204,7 +216,8 @@ async function fetchPricesFor(game: GameRow): Promise<StoredPrices> {
 async function loadPrices(
   weekGames: GameRow[],
   refreshable: Set<string>,
-  ttlMs: number
+  ttlMs: number,
+  mode: RefreshMode = "wait"
 ): Promise<Map<string, Cached<StoredPrices>>> {
   const cache = await readMany<StoredPrices>(weekGames.map((g) => keys.prices(g.id)));
   const out = new Map<string, Cached<StoredPrices>>();
@@ -219,6 +232,12 @@ async function loadPrices(
         configured && !low && refreshable.has(game.id) && !started(game) && !isFresh(hit, ttlMs);
       if (!mayFetch) {
         if (hit) out.set(game.id, hit);
+        return;
+      }
+      if (mode === "background" && hit) {
+        // Show what's cached, with its real age, and refetch after the response.
+        out.set(game.id, hit);
+        await revalidate(key, hit, () => fetchPricesFor(game), mode);
         return;
       }
       const value = await refresh(key, hit, () => fetchPricesFor(game));
@@ -275,11 +294,15 @@ export async function loadTdWeek(
   const pickedGames = new Set(picks.map((p) => p.gameId));
   const startedPicked = weekGames.filter((g) => started(g) && pickedGames.has(g.id));
 
+  // A page view shows whatever is cached and refreshes stale feeds after the
+  // response, so opening the module never waits on ESPN or the Odds API unless
+  // there is nothing cached at all. The live board re-pulls every minute, so a
+  // box score is at most one refresh behind.
   const [roster, lines, boxes, prices] = await Promise.all([
-    loadRosters(season, weekGames),
-    loadLines(weekGames),
-    loadBoxes(startedPicked),
-    loadPrices(weekGames, pickedGames, PRICE_TTL_MS),
+    loadRosters(season, weekGames, "background"),
+    loadLines(weekGames, "background"),
+    loadBoxes(startedPicked, "background"),
+    loadPrices(weekGames, pickedGames, PRICE_TTL_MS, "background"),
   ]);
 
   const gameById = new Map(weekGames.map((g) => [g.id, g]));

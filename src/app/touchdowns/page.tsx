@@ -39,20 +39,22 @@ export default async function TouchdownsPage({ searchParams }: Props) {
   if (!user) redirect("/login?next=/touchdowns");
   if (!canSeeModule(user, "touchdowns")) redirect("/");
 
-  const calendar = await fetchCalendar();
+  // Independent of each other, so neither waits on the other.
+  const [calendar] = await Promise.all([fetchCalendar(), ensureUsersSeeded()]);
   const season = calendar.season;
   const weeks = calendar.weeks.map((w) => w.week);
 
   const requested = Number((await searchParams).week);
   const week = weeks.includes(requested) ? requested : calendar.currentWeek;
 
-  await ensureUsersSeeded();
   // Kickoffs and live status come from the Pick'em games table, kept fresh the
   // same way; this module only adds players, props and box scores on top.
   await ensureWeekFresh(season, week);
 
-  const weekGames = await getWeekGames(season, week);
-  const picks = await getWeekTdPicks(season, week);
+  const [weekGames, picks] = await Promise.all([
+    getWeekGames(season, week),
+    getWeekTdPicks(season, week),
+  ]);
   const data = await loadTdWeek(season, weekGames, picks);
 
   return (
