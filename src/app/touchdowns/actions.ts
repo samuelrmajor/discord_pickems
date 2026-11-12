@@ -1,11 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import type { GameRow } from "@/db/schema";
+import { postToGambling } from "@/lib/discord";
 import { fetchCalendar } from "@/lib/espn";
 import { canSeeModule } from "@/lib/modules";
 import { getWeekGames } from "@/lib/queries";
+import { memberByName } from "@/lib/fantasy/config";
 import { getCurrentUser } from "@/lib/session";
-import { findPlayer, priceFor, warmPrices } from "@/lib/td/data";
+import { pickAnnouncement } from "@/lib/td/announce";
+import { findPlayer, legPrices, loadLines, priceFor, warmPrices } from "@/lib/td/data";
+import type { RosterPlayer } from "@/lib/td/espn";
+import { USERS } from "@/lib/users";
 import { clearTdPick, getWeekTdPicks, saveTdPick } from "@/lib/td/picks";
 
 export type TdResult = { ok: true } | { ok: false; error: string };
@@ -62,7 +69,53 @@ export async function pickPlayer(week: number, athleteId: string): Promise<TdRes
   if (!saved) return { ok: false, error: `someone just took ${player.name}` };
 
   revalidatePath("/touchdowns");
+  // After the response, so the pick is saved and shown without waiting on Discord.
+  after(() =>
+    announcePick({ season, week, user, weekGames, player, game, previous: mine?.athleteName ?? null })
+  );
   return { ok: true };
+}
+
+/** Everyone puts in a dollar, the same as the page. */
+const STAKE_PER_MEMBER = 1;
+
+/**
+ * Tell #gambling about a pick. Best effort: a failed post is logged and
+ * dropped, never surfaced — the pick itself already stands.
+ */
+async function announcePick(p: {
+  season: number;
+  week: number;
+  user: string;
+  weekGames: GameRow[];
+  player: RosterPlayer;
+  game: GameRow;
+  previous: string | null;
+}): Promise<void> {
+  try {
+    // Re-read so the count includes anyone who picked at the same moment.
+    const picks = await getWeekTdPicks(p.season, p.week);
+    const [prices, lines] = await Promise.all([
+      legPrices(p.weekGames, picks, p.game.id),
+      loadLines([p.game]),
+    ]);
+    await postToGambling(
+      pickAnnouncement({
+        week: p.week,
+        who: memberByName(p.user)?.realName ?? display(p.user),
+        player: p.player,
+        previous: p.previous,
+        game: p.game,
+        line: lines.get(p.game.id)?.has(p.player.id) ?? null,
+        price: prices.get(p.player.id) ?? null,
+        legs: picks.map((pick) => prices.get(pick.athleteId) ?? null),
+        members: USERS.length,
+        stake: STAKE_PER_MEMBER * USERS.length,
+      })
+    );
+  } catch (err) {
+    console.error("couldn't announce the TD pick in #gambling", err);
+  }
 }
 
 export async function clearPick(week: number): Promise<TdResult> {

@@ -3,6 +3,7 @@
  * Run with: npx tsx scripts/test-td.ts
  */
 import assert from "node:assert/strict";
+import { pickAnnouncement, type PickAnnouncement } from "../src/lib/td/announce";
 import { matchEvent } from "../src/lib/td/odds-api";
 import {
   americanToDecimal,
@@ -132,6 +133,67 @@ check("every leg in with none busted cashes, voids and all", () => {
 
 check("an all-void ticket hasn't cashed anything", () => {
   assert.equal(parlayState(["void", "void"]).state, "open");
+});
+
+console.log("\n#gambling announcement");
+
+const base: PickAnnouncement = {
+  week: 11,
+  who: "David W",
+  player: { name: "Justin Jefferson", pos: "WR", team: "MIN", injury: null },
+  previous: null,
+  // Sunday 1:00 PM ET.
+  game: { awayAbbr: "MIN", homeAbbr: "CHI", kickoffAt: new Date("2026-11-15T18:00:00Z") },
+  line: true,
+  price: 100,
+  legs: [100, 100, null],
+  members: 12,
+  stake: 12,
+};
+const text = (a: PickAnnouncement) => {
+  const e = pickAnnouncement(a).embeds![0];
+  return `${e.title}\n${e.description}`;
+};
+
+check("a first pick names who, the player, the matchup and his price", () => {
+  const t = text(base);
+  assert.ok(t.includes("David W locked in Justin Jefferson"), t);
+  assert.ok(t.includes("WR, MIN"), t);
+  assert.ok(t.includes("MIN @ CHI · Sun 1:00 PM ET"), t);
+  assert.ok(t.includes("+100 (DraftKings)"), t);
+  assert.ok(!t.includes("~~"), t);
+});
+
+check("a change says what it replaced", () => {
+  const t = text({ ...base, previous: "Bijan Robinson" });
+  assert.ok(t.includes("switched their TD pick to Justin Jefferson"), t);
+  assert.ok(t.includes("~~Bijan Robinson~~ → **Justin Jefferson**"), t);
+});
+
+check("the ticket line closes the post: count, odds and the $12 payout", () => {
+  const last = text(base).split("\n").at(-1)!;
+  assert.ok(last.startsWith("**3/12** TD picks are in"), last);
+  assert.ok(last.includes("current odds **+300**"), last);
+  assert.ok(last.includes("total payout on $12: **$48**"), last);
+  assert.ok(last.includes("1 unpriced leg left out"), last);
+});
+
+check("no price: says why, and the ticket waits for one", () => {
+  const t = text({ ...base, price: null, line: false, legs: [null] });
+  assert.ok(t.includes("no DraftKings line"), t);
+  assert.ok(t.endsWith("**1/12** TD picks are in · no prices yet"), t);
+});
+
+check("an injury tag is shown when he has one", () => {
+  const t = text({ ...base, player: { ...base.player, injury: "Questionable" } });
+  assert.ok(t.includes("**Status:** Questionable"), t);
+});
+
+check("the post never pings anyone", () => {
+  const m = pickAnnouncement(base);
+  assert.deepEqual(m.mentions, []);
+  assert.equal(m.everyone, false);
+  assert.equal(m.content, undefined);
 });
 
 console.log(`\n${checks} checks passed.`);

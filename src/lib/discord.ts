@@ -8,6 +8,9 @@
 
 const WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 
+/** The league's #gambling channel, where anytime-TD picks are announced. */
+const GAMBLING_WEBHOOK = process.env.DISCORD_WEBHOOK_URL_GAMBLING;
+
 /** Discord's own caps. Exceeding either is a 400, so we trim instead. */
 const CONTENT_LIMIT = 2000;
 const DESCRIPTION_LIMIT = 4096;
@@ -60,6 +63,26 @@ export function mention(discordUserId: string): string {
 
 export async function postToDiscord(message: DiscordMessage): Promise<void> {
   if (!WEBHOOK) throw new DiscordNotConfigured();
+  await send(WEBHOOK, message);
+}
+
+/**
+ * Post to #gambling. Never pings anyone, whatever the message asks for: these
+ * go out on every pick, and the channel is for reading, not for buzzing.
+ *
+ * Returns false, without throwing, when the webhook isn't configured — an
+ * announcement is a side effect and must never block saving a pick.
+ */
+export async function postToGambling(message: DiscordMessage): Promise<boolean> {
+  if (!GAMBLING_WEBHOOK) {
+    console.warn("DISCORD_WEBHOOK_URL_GAMBLING is not set; skipping the #gambling post");
+    return false;
+  }
+  await send(GAMBLING_WEBHOOK, { ...message, mentions: [], everyone: false });
+  return true;
+}
+
+async function send(webhook: string, message: DiscordMessage): Promise<void> {
 
   /**
    * Notify exactly who was asked for and nobody else.
@@ -90,7 +113,7 @@ export async function postToDiscord(message: DiscordMessage): Promise<void> {
       : {}),
   };
 
-  const res = await fetch(WEBHOOK, {
+  const res = await fetch(webhook, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

@@ -245,15 +245,18 @@ export function priceFor(index: Record<string, number>, name: string): number | 
 }
 
 /**
- * Each pick's anytime-TD price, by athlete id, for the Discord reminder. Same
- * cache and credit rules as the page: only games someone has picked in, no
- * more than once per game per `PRICE_TTL_MS`, and frozen at kickoff.
+ * Each leg's price by athlete id, for the #gambling post. Only `freshGameId`
+ * — the game a pick was just made in — may be refreshed, on the preview TTL,
+ * and the person picking almost always previewed it moments ago, so this
+ * rarely spends a credit. Every other game is served from cache as it stands.
  */
-export async function loadPickPrices(
+export async function legPrices(
   weekGames: GameRow[],
-  picks: TdPickRow[]
+  picks: TdPickRow[],
+  freshGameId: string
 ): Promise<Map<string, number | null>> {
-  const prices = await loadPrices(weekGames, new Set(picks.map((p) => p.gameId)), PRICE_TTL_MS);
+  const games = weekGames.filter((g) => picks.some((p) => p.gameId === g.id));
+  const prices = await loadPrices(games, new Set([freshGameId]), PREVIEW_PRICE_TTL_MS);
   return new Map(
     picks.map((pick) => {
       const sheet = prices.get(pick.gameId)?.value.prices;

@@ -9,7 +9,6 @@
  * to go and vote.
  */
 import type { DiscordMessage } from "../discord";
-import { formatAmerican, formatAmericanLong, quoteParlay } from "../td/odds";
 import type { TdCell } from "../td/reminders";
 import { ADMIN_LABEL } from "./admin";
 
@@ -145,76 +144,24 @@ function checklist(everyone: Recipient[]): string {
   const rows = everyone.map((person) =>
     [
       outstanding(person) ? "!" : " ",
-      person.realName.slice(0, NAME_WIDTH).padEnd(NAME_WIDTH),
+      person.realName.slice(0, 12).padEnd(12),
       picksCell(person),
       person.lockedIn ? " in" : " --",
-      ...(withTd ? [tdCell(person), oddsCell(person)] : []),
+      ...(withTd ? [tdCell(person)] : []),
     ].join("  ")
   );
   // The header is spaced to the columns the rows build below: the name starts
-  // at 3, the picks count at 13, the ballot at 20, the TD pick at 25, and its
-  // odds, right-aligned, end at 42.
-  const header = "   Member    Picks  Poll" + (withTd ? " TD" + " ".repeat(12) + "Odds" : "");
-  const table = ["```", header, ...rows, "```"];
-  if (everyone.some((p) => p.td?.noLine)) table.push("\\* no DraftKings anytime-TD line");
-  if (withTd) {
-    const parlay = parlayLine(everyone);
-    if (parlay) table.push(parlay);
-  }
-  return table.join("\n");
+  // at 3, the picks count at 17, the ballot at 24 and the TD leg at 29.
+  const header = "   Member        Picks  Poll" + (withTd ? "  TD" : "");
+  return ["```", header, ...rows, "```"].join("\n");
 }
 
-/** Every member's name in config.json fits ("Jackson", "David W"). */
-const NAME_WIDTH = 8;
-
-/** Each member puts a dollar on their leg, so the ticket is a dollar a head. */
-const STAKE_PER_LEG = 1;
-
-/**
- * The anytime-TD ticket so far: its combined odds and what it pays. Legs with
- * no known price are left out of the number and said so, never guessed at.
- * Null until at least one leg is priced.
- */
-function parlayLine(everyone: Recipient[]): string | null {
-  const legs = everyone.filter((p) => p.td?.player);
-  const stake = everyone.length * STAKE_PER_LEG;
-  const quote = quoteParlay(
-    legs.map((p) => p.td!.price),
-    stake
-  );
-  if (quote.priced === 0) return null;
-  const pays = quote.payout.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  const unpriced = quote.unpriced
-    ? ` (${quote.unpriced} unpriced leg${quote.unpriced === 1 ? "" : "s"} left out)`
-    : "";
-  return (
-    `**TD parlay:** ${legs.length} legs at **${formatAmericanLong(quote.american)}**` +
-    ` · $${stake} pays **$${pays}**${unpriced}`
-  );
-}
-
-/** "+1200"; blank when there's no pick or no price for it. */
-function oddsCell(person: Recipient): string {
-  const price = person.td?.player ? person.td.price : null;
-  return (price === null ? "" : formatAmerican(price)).padStart(5);
-}
-
-/** Wide enough for "J.Jefferson*" while keeping the table under ~40 columns. */
-const TD_WIDTH = 11;
-
-/**
- * Their anytime-TD player, shortened to "J.Jefferson", with a "*" when the
- * book has no line for him — the leg can't be placed as it stands.
- */
+/** Like the poll: " in" once their leg is picked, " --" while it's owed. */
 function tdCell(person: Recipient): string {
   const td = person.td;
-  if (td === undefined) return "".padEnd(TD_WIDTH);
-  if (td === null) return "?".padEnd(TD_WIDTH);
-  if (!td.player) return "--".padEnd(TD_WIDTH);
-  const [first, ...rest] = td.player.split(" ");
-  const short = rest.length ? `${first.charAt(0)}.${rest.join(" ")}` : first;
-  const mark = td.noLine ? "*" : "";
-  return (short.slice(0, TD_WIDTH - mark.length) + mark).padEnd(TD_WIDTH);
+  if (td === undefined) return "   ";
+  if (td === null) return "  ?";
+  return td.player ? " in" : " --";
 }
 
 /**
